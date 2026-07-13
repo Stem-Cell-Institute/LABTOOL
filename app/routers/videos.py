@@ -262,21 +262,22 @@ def reanalyze(video_id: int, request: Request, db: Session = Depends(get_db)):
     if user.role != "admin" and video.group_id != user.group_id:
         raise HTTPException(status_code=403)
 
-    if video.status == "processing":
-        # Đã có 1 lượt phân tích đang chạy cho video này — chặn double-click gửi thêm
-        # request để tránh 2 thread cùng ghi ExperimentLog, gây lỗi unique constraint
-        # khiến thread thất bại đè status "done" của thread thành công thành "failed".
+    # Claim nguyên tử bằng UPDATE...WHERE thay vì đọc-rồi-ghi: nếu 2 request gần như đồng
+    # thời (double-click) cùng gọi reanalyze, chỉ 1 request UPDATE được ("thắng"), request
+    # kia thấy rowcount=0 và bị chặn — tránh 2 thread cùng ghi ExperimentLog, gây lỗi unique
+    # constraint khiến thread thất bại đè status "done" của thread thành công thành "failed".
+    claimed = db.query(Video).filter(
+        Video.id == video_id,
+        Video.status != "processing",
+    ).update({"status": "processing", "error_message": ""}, synchronize_session=False)
+    db.commit()
+    if not claimed:
         request.session["flash"] = "Video đang được phân tích, vui lòng đợi."
         return RedirectResponse(f"/videos/{video.id}", status_code=302)
 
     if video.log:
         db.delete(video.log)
-    # Đặt "processing" ngay tại đây (đồng bộ, trước khi thread nền kịp chạy) để lần
-    # click tiếp theo (nếu có) bị chặn bởi điều kiện ở trên thay vì lọt qua trong lúc
-    # thread nền chưa kịp tự cập nhật status.
-    video.status = "processing"
-    video.error_message = ""
-    db.commit()
+        db.commit()
 
     threading.Thread(target=_analyze_in_background, args=(video.id,), daemon=True).start()
     return RedirectResponse(f"/videos/{video.id}", status_code=302)

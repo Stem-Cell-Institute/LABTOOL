@@ -62,11 +62,22 @@ def _report_dir(user_id: int, report_id: int) -> str:
 def _analyze_report_background(report_id: int):
     db = SessionLocal()
     try:
+        # Claim nguyên tử bằng UPDATE...WHERE thay vì đọc-rồi-ghi: nếu 2 request (VD nộp
+        # báo cáo + admin bấm "phân tích lại") gần như đồng thời cùng khởi động luồng nền
+        # cho cùng 1 report_id, chỉ luồng nào UPDATE trước mới "giành" được quyền chạy —
+        # luồng còn lại thấy ai_status đã là "running" nên rowcount=0 và tự thoát, tránh
+        # 2 luồng cùng ghi đè chéo kết quả phân tích của nhau.
+        claimed = db.query(MonthlyReport).filter(
+            MonthlyReport.id == report_id,
+            MonthlyReport.ai_status != "running",
+        ).update({"ai_status": "running"}, synchronize_session=False)
+        db.commit()
+        if not claimed:
+            return
+
         report = db.get(MonthlyReport, report_id)
         if not report:
             return
-        report.ai_status = "running"
-        db.commit()
 
         # Lấy báo cáo 3 tháng trước để so sánh
         previous = (
@@ -748,6 +759,12 @@ def reanalyze_report(report_id: int, request: Request, db: Session = Depends(get
     report = db.get(MonthlyReport, report_id)
     if not report:
         raise HTTPException(status_code=404)
+
+    if report.ai_status == "running":
+        # Đang có 1 luồng phân tích thật sự chạy cho báo cáo này — không reset, tránh
+        # 2 luồng cùng ghi đè kết quả (xem thêm claim nguyên tử trong _analyze_report_background).
+        request.session["flash"] = "Báo cáo đang được phân tích, vui lòng đợi."
+        return RedirectResponse(f"/results/{report_id}", status_code=302)
 
     report.ai_status      = "pending"
     report.ai_analysis    = ""

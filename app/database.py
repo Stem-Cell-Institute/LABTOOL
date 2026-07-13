@@ -72,3 +72,37 @@ def sync_schema():
                         {"val": default.arg},
                     )
                     print(f"[sync_schema] backfilled default for {table.name}.{col.name}")
+
+
+def recover_interrupted_jobs():
+    """Đánh dấu lại các job phân tích AI (video, báo cáo) bị kẹt ở trạng thái "đang xử lý"
+    do server tắt/khởi động lại giữa chừng lần chạy trước.
+
+    Trạng thái "processing"/"running" chỉ được cập nhật tiếp bởi chính luồng nền
+    (threading.Thread) đã tạo ra nó — nếu tiến trình chết giữa chừng (deploy, crash, mất
+    điện...), luồng đó biến mất cùng tiến trình và không ai cập nhật lại nữa, khiến bản ghi
+    kẹt "đang xử lý" vĩnh viễn và không route nào cho phép chạy lại (để tránh 2 luồng đá
+    nhau). Gọi hàm này mỗi lần khởi động, TRƯỚC khi có request nào tới, để chuyển các bản
+    ghi kẹt từ lần chạy trước thành "lỗi" — cho phép admin bấm Retry/Phân tích lại bình
+    thường qua giao diện thay vì phải sửa thẳng database.
+    """
+    from app.models import Video, MonthlyReport  # import trễ để tránh vòng lặp import với models.py
+
+    db = SessionLocal()
+    try:
+        stuck_videos = db.query(Video).filter(Video.status == "processing").all()
+        for v in stuck_videos:
+            v.status = "failed"
+            v.error_message = "Bị gián đoạn do hệ thống khởi động lại — nhấn Retry để phân tích lại."
+
+        stuck_reports = db.query(MonthlyReport).filter(MonthlyReport.ai_status == "running").all()
+        for r in stuck_reports:
+            r.ai_status = "failed"
+            r.ai_analysis = "Bị gián đoạn do hệ thống khởi động lại — nhấn 'Phân tích lại' để thử lại."
+
+        if stuck_videos or stuck_reports:
+            db.commit()
+            print(f"[recover] Da danh dau {len(stuck_videos)} video va {len(stuck_reports)} "
+                  f"bao cao bi ket 'dang xu ly' thanh 'loi' do restart truoc do.")
+    finally:
+        db.close()
