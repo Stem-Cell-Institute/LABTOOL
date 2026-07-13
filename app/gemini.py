@@ -2,8 +2,11 @@
 
 import os
 import time
+import logging
 from google import genai
 from google.genai import types
+
+logger = logging.getLogger(__name__)
 
 # Temperature=0 để Gemini luôn chọn phương án khả dĩ nhất thay vì lấy mẫu ngẫu nhiên
 # — quan trọng cho các bước phân loại/gộp nhóm thí nghiệm (Nhỏ/Lớn) vốn dễ dao động
@@ -425,7 +428,14 @@ def analyze_monthly_report(
             try:
                 uploaded_files.append(get_client().files.upload(file=path))
             except Exception:
-                pass
+                logger.exception("Loi upload file minh chung len Gemini: %s", path)
+                # Không được im lặng bỏ qua: nếu không upload được, phải báo rõ trong nội
+                # dung chấm — nếu không, quy tắc "thí nghiệm Lớn thiếu file minh chứng = 0
+                # điểm" sẽ tính nhầm là thiếu minh chứng thay vì lỗi upload tạm thời.
+                evidence_text_parts.append(
+                    f"\n\n--- File minh chứng: {fname} (LỖI: không tải được lên hệ thống AI để "
+                    f"phân tích — không phải do thiếu minh chứng, cần người quản lý xác minh thủ công) ---"
+                )
         else:
             text = _extract_evidence_text(path, ext)
             if text:
@@ -515,7 +525,7 @@ def ask_about_diary_entries(question: str, entries: list, history: str = "") -> 
         content = e.content or ""
         if len(content) > DIARY_AI_MAX_ENTRY_CHARS:
             content = content[:DIARY_AI_MAX_ENTRY_CHARS] + "\n...(nội dung đã bị cắt bớt do quá dài)"
-        author = e.author.full_name or e.author.username if e.author else "?"
+        author = e.author.full_name or e.author.email if e.author else "?"
         scope = ""
         if e.project:
             scope = f" | Project: {e.project.name}"

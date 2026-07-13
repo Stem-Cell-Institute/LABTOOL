@@ -164,6 +164,56 @@ def run():
         """)
         print("[migrate] +system_config table")
 
+    # --- users: bo cot username, dang nhap chuyen sang dung email ---
+    cols_u2 = {row[1] for row in cur.execute("PRAGMA table_info(users)").fetchall()}
+    if "username" in cols_u2:
+        # Backfill email rong/trung bang placeholder duy nhat (dua tren username cu,
+        # von da UNIQUE) de ALTER sau nay khong vi pham UNIQUE(email).
+        seen_emails = set()
+        for uid, uname, email in cur.execute("SELECT id, username, email FROM users").fetchall():
+            e = (email or "").strip().lower()
+            if not e or e in seen_emails:
+                e = f"{uname}@local.placeholder"
+                cur.execute("UPDATE users SET email = ? WHERE id = ?", (e, uid))
+                print(f"[migrate] user id={uid} ({uname}): email rong/trung -> placeholder '{e}' (can admin cap nhat lai)")
+            else:
+                cur.execute("UPDATE users SET email = ? WHERE id = ?", (e, uid))
+            seen_emails.add(e)
+
+        # PRAGMA foreign_keys chi co hieu luc khi KHONG co transaction dang mo —
+        # cac UPDATE backfill o tren da tu mo 1 transaction ngam, nen phai commit
+        # truoc thi PRAGMA moi thuc su tat duoc kiem tra FK cho DROP TABLE users ben duoi.
+        conn.commit()
+        cur.execute("PRAGMA foreign_keys = OFF")
+        cur.executescript("""
+            CREATE TABLE users_new (
+                id INTEGER PRIMARY KEY,
+                password_hash VARCHAR(200) NOT NULL,
+                full_name VARCHAR(120) DEFAULT '',
+                email VARCHAR(200) NOT NULL UNIQUE,
+                role VARCHAR(20) DEFAULT 'member',
+                member_type VARCHAR(20) DEFAULT 'researcher',
+                group_id INTEGER REFERENCES groups(id),
+                is_active BOOLEAN DEFAULT 1,
+                is_approved BOOLEAN DEFAULT 0,
+                can_view_all BOOLEAN DEFAULT 0,
+                can_create_project BOOLEAN DEFAULT 1,
+                created_at DATETIME
+            );
+            INSERT INTO users_new (id, password_hash, full_name, email, role, member_type,
+                                    group_id, is_active, is_approved, can_view_all,
+                                    can_create_project, created_at)
+                SELECT id, password_hash, full_name, email, role, member_type,
+                       group_id, is_active, is_approved, can_view_all,
+                       can_create_project, created_at
+                FROM users;
+            DROP TABLE users;
+            ALTER TABLE users_new RENAME TO users;
+            CREATE INDEX ix_users_email ON users (email);
+        """)
+        cur.execute("PRAGMA foreign_keys = ON")
+        print("[migrate] users: bo cot username, email la dinh danh dang nhap (UNIQUE NOT NULL)")
+
     conn.commit()
     conn.close()
     print("[migrate] Hoan tat.")

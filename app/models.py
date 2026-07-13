@@ -24,10 +24,9 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    username = Column(String(60), unique=True, nullable=False, index=True)
     password_hash = Column(String(200), nullable=False)
     full_name = Column(String(120), default="")
-    email = Column(String(200), default="")
+    email = Column(String(200), unique=True, nullable=False, index=True)
     role = Column(String(20), default="member")  # "admin" | "member" — QUYỀN hệ thống
     member_type = Column(String(20), default="researcher")  # "researcher" | "student" | "ncs" — CHỨC DANH, độc lập với role
     group_id = Column(Integer, ForeignKey("groups.id"), nullable=True)

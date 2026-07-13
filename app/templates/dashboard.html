@@ -11,7 +11,7 @@
       {% if user.can_view_all and user.role != 'admin' %}
         <i class="bi bi-star-fill text-warning me-1" style="font-size:.8em;"></i>Xin chào Viện trưởng!
       {% else %}
-        Xin chào, {{ user.full_name or user.username }}
+        Xin chào, {{ user.full_name or user.email }}
         {% if user.role == 'admin' %}<span class="badge bg-danger ms-2 align-middle" style="font-size:.6rem;">Admin</span>{% endif %}
       {% endif %}
     </h4>
@@ -191,7 +191,7 @@
         <tbody>
           {% for e in diary_recent %}
           <tr>
-            <td>{{ e.author.full_name or e.author.username }}</td>
+            <td>{{ e.author.full_name or e.author.email }}</td>
             <td class="text-truncate" style="max-width:280px;">{{ e.title or ('Nhật ký #' ~ e.id) }}</td>
             <td class="text-muted">{{ e.created_at.strftime('%d/%m %H:%M') }}</td>
             <td><a href="/diary/{{ e.id }}" class="btn btn-sm btn-outline-secondary">Xem</a></td>

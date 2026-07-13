@@ -31,8 +31,8 @@
       </div>
       <div class="col-md-3">
         <label class="form-label small fw-semibold mb-1">Người dùng</label>
-        <input type="text" name="username" class="form-control form-control-sm"
-               placeholder="username..." value="{{ filter_username }}">
+        <input type="text" name="email" class="form-control form-control-sm"
+               placeholder="email..." value="{{ filter_email }}">
       </div>
       <div class="col-md-2">
         <label class="form-label small fw-semibold mb-1">Số bản ghi</label>
@@ -88,7 +88,7 @@
             <td>{{ entry.description }}</td>
             <td>
               {% if entry.user_id and entry.user_id in user_cache and user_cache[entry.user_id] %}
-                <i class="bi bi-person me-1 text-muted"></i>{{ user_cache[entry.user_id].username }}
+                <i class="bi bi-person me-1 text-muted"></i>{{ user_cache[entry.user_id].email }}
               {% else %}
                 <span class="text-muted">Hệ thống</span>
               {% endif %}

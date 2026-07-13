@@ -7,11 +7,14 @@ from datetime import datetime, timedelta
 _lock = threading.Lock()
 _failed_logins: dict  = defaultdict(list)   # ip -> [datetime, ...]
 _reg_attempts: dict   = defaultdict(list)   # ip -> [datetime, ...]
+_status_checks: dict  = defaultdict(list)   # ip -> [datetime, ...]
 
 LOGIN_MAX     = 5    # số lần sai tối đa
 LOGIN_WINDOW  = 15   # phút khoá sau khi vượt ngưỡng
 REG_MAX       = 5    # số lần đăng ký tối đa
 REG_WINDOW    = 60   # phút cho cửa sổ đăng ký
+STATUS_MAX    = 10   # số lần kiểm tra trạng thái tối đa — chặn dò email tồn tại
+STATUS_WINDOW = 15   # phút cho cửa sổ kiểm tra trạng thái
 
 
 def _prune(lst: list, window_min: int) -> list:
@@ -57,12 +60,29 @@ def record_reg_attempt(ip: str):
         _reg_attempts[ip].append(datetime.utcnow())
 
 
+# ── Check-status rate limit ───────────────────────────────────────────────────
+
+def is_status_check_limited(ip: str) -> bool:
+    with _lock:
+        attempts = _prune(_status_checks[ip], STATUS_WINDOW)
+        _status_checks[ip] = attempts
+        return len(attempts) >= STATUS_MAX
+
+
+def record_status_check(ip: str):
+    with _lock:
+        _status_checks[ip].append(datetime.utcnow())
+
+
 # ── Password strength ─────────────────────────────────────────────────────────
 
 def check_password(password: str) -> str | None:
     """None = OK, string = thông báo lỗi."""
     if len(password) < 8:
         return "Mật khẩu phải có ít nhất 8 ký tự."
+    if len(password.encode("utf-8")) > 72:
+        # bcrypt chỉ xử lý tối đa 72 byte — vượt quá sẽ lỗi khi hash thay vì báo rõ ràng.
+        return "Mật khẩu quá dài (tối đa 72 ký tự)."
     has_upper  = bool(re.search(r'[A-Z]', password))
     has_digit  = bool(re.search(r'\d',    password))
     if not has_upper and not has_digit:

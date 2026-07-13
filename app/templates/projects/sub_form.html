@@ -30,7 +30,7 @@
             <select name="owner_user_id" class="form-select" required>
               {% for m in members %}
               <option value="{{ m.user_id }}" {% if m.user_id == user.id %}selected{% endif %}>
-                {{ m.user.full_name or m.user.username }}{% if m.user_id == parent.owner_id %} (quản lý project){% endif %}
+                {{ m.user.full_name or m.user.email }}{% if m.user_id == parent.owner_id %} (quản lý project){% endif %}
               </option>
               {% endfor %}
             </select>

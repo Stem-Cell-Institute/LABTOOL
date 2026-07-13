@@ -69,6 +69,9 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse("/login", status_code=302)
 
     user = db.get(User, user_id)
+    if not user or not user.is_active:
+        request.session.clear()
+        return RedirectResponse("/login", status_code=302)
     flash = request.session.pop("flash", None)
     now = datetime.utcnow()
     cur_month, cur_year = now.month, now.year

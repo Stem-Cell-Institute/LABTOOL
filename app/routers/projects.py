@@ -151,7 +151,11 @@ async def save_project(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse(back, status_code=302)
 
     if project_id:
-        project = db.get(Project, int(project_id))
+        try:
+            project_id_int = int(project_id)
+        except ValueError:
+            raise HTTPException(status_code=400)
+        project = db.get(Project, project_id_int)
         if not project or not _can_manage_project(user, project, db):
             raise HTTPException(status_code=403)
         project.name = name
@@ -238,7 +242,7 @@ async def create_sub_project(project_id: int, request: Request, db: Session = De
 
     owner_user = db.get(User, owner_id)
     log_activity(db, "create_project",
-                 f"Tạo đề tài nhánh '{name}' thuộc '{parent.name}', phụ trách: {owner_user.username}",
+                 f"Tạo đề tài nhánh '{name}' thuộc '{parent.name}', phụ trách: {owner_user.email}",
                  user_id=user.id, target_type="project", target_id=sub.id,
                  group_id=user.group_id)
 
@@ -247,7 +251,7 @@ async def create_sub_project(project_id: int, request: Request, db: Session = De
 
 
 @router.post("/projects/{project_id}/add-member")
-def add_member(project_id: int, request: Request, username: str = Form(...), db: Session = Depends(get_db)):
+def add_member(project_id: int, request: Request, email: str = Form(...), db: Session = Depends(get_db)):
     user = _get_user(request, db)
     if not user:
         return RedirectResponse("/login", status_code=302)
@@ -255,7 +259,7 @@ def add_member(project_id: int, request: Request, username: str = Form(...), db:
     if not project or not _can_manage_project(user, project, db):
         raise HTTPException(status_code=403)
 
-    target = db.query(User).filter(User.username == username.strip().lower()).first()
+    target = db.query(User).filter(User.email == email.strip().lower()).first()
     if not target:
         request.session["flash"] = "error:Không tìm thấy tài khoản này."
         return RedirectResponse(f"/projects/{project_id}", status_code=302)
@@ -266,11 +270,11 @@ def add_member(project_id: int, request: Request, username: str = Form(...), db:
     db.add(ProjectMember(project_id=project_id, user_id=target.id, added_by=user.id))
     db.commit()
 
-    log_activity(db, "add_project_member", f"Thêm {target.username} vào project '{project.name}'",
+    log_activity(db, "add_project_member", f"Thêm {target.email} vào project '{project.name}'",
                  user_id=user.id, target_type="project", target_id=project_id,
                  group_id=user.group_id)
 
-    request.session["flash"] = f"Đã thêm {target.full_name or target.username} vào project."
+    request.session["flash"] = f"Đã thêm {target.full_name or target.email} vào project."
     return RedirectResponse(f"/projects/{project_id}", status_code=302)
 
 

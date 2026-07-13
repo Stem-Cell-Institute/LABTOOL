@@ -94,8 +94,8 @@
           {% set user_total = namespace(count=0) %}
           <tr>
             <td class="sticky-col">
-              <div class="fw-semibold small">{{ u.full_name or u.username }}</div>
-              {% if u.full_name %}<div class="text-muted" style="font-size:0.75rem;">@{{ u.username }}</div>{% endif %}
+              <div class="fw-semibold small">{{ u.full_name or u.email }}</div>
+              {% if u.full_name %}<div class="text-muted" style="font-size:0.75rem;">{{ u.email }}</div>{% endif %}
             </td>
             {% for m in range(1, 13) %}
             {% set cell_videos = matrix[u.id][m] %}

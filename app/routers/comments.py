@@ -27,7 +27,7 @@ def add_comment(
     log = db.get(ExperimentLog, log_id)
     if not log:
         raise HTTPException(status_code=404)
-    if user.role != "admin" and log.video.group_id != user.group_id:
+    if user.role != "admin" and not user.can_view_all and log.video.group_id != user.group_id:
         raise HTTPException(status_code=403)
 
     content = content.strip()
@@ -38,7 +38,7 @@ def add_comment(
     db.add(comment)
     db.commit()
     log_activity(db, "comment",
-                 f"{user.username} binh luan tren nhat ky #{log_id}",
+                 f"{user.email} binh luan tren nhat ky #{log_id}",
                  user_id=user.id, target_type="log",
                  target_id=log_id, group_id=log.video.group_id)
     request.session["flash"] = "Đã thêm bình luận"

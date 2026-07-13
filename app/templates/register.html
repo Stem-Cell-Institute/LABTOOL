@@ -45,17 +45,6 @@
       </div>
 
       <div class="mb-3">
-        <label class="form-label fw-semibold">Tên đăng nhập <span class="text-danger">*</span></label>
-        <div class="input-group">
-          <span class="input-group-text"><i class="bi bi-at"></i></span>
-          <input type="text" name="username" class="form-control" id="usernameInput"
-                 placeholder="vd: nguyenvana" minlength="3"
-                 value="{{ form.username if form else '' }}" required>
-        </div>
-        <div class="form-text">Chỉ dùng chữ, số, dấu gạch dưới/ngang. Tối thiểu 3 ký tự.</div>
-      </div>
-
-      <div class="mb-3">
         <label class="form-label fw-semibold">Bạn tham gia với vai trò <span class="text-danger">*</span></label>
         <div class="d-flex gap-3 flex-wrap">
           <div class="form-check">
@@ -82,9 +71,10 @@
         <div class="input-group">
           <span class="input-group-text"><i class="bi bi-envelope"></i></span>
           <input type="email" name="email" class="form-control"
-                 placeholder="email@example.com" required
+                 placeholder="abc@sci.edu.vn" required
                  value="{{ form.email if form else '' }}">
         </div>
+        <div class="form-text">Dùng để đăng nhập, vui lòng nhập chính xác.</div>
       </div>
 
       <div class="mb-3">

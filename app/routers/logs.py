@@ -66,7 +66,7 @@ def log_list(
             pass
     if to_date:
         try:
-            query = query.filter(ExperimentLog.created_at <= datetime.strptime(to_date, "%Y-%m-%d").replace(hour=23, minute=59))
+            query = query.filter(ExperimentLog.created_at <= datetime.strptime(to_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59))
         except ValueError:
             pass
 
@@ -183,6 +183,11 @@ def question_status(log_id: int, qid: int, request: Request, db: Session = Depen
     user = _get_user(request, db)
     if not user:
         raise HTTPException(status_code=401)
+    log = db.get(ExperimentLog, log_id)
+    if not log:
+        raise HTTPException(status_code=404)
+    if not _check_log_access(user, log):
+        raise HTTPException(status_code=403)
     vq = db.get(VideoQuestion, qid)
     if not vq or vq.log_id != log_id:
         raise HTTPException(status_code=404)

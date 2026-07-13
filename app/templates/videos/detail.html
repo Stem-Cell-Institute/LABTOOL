@@ -16,7 +16,7 @@
         <h5 class="fw-bold mb-1"><i class="bi bi-camera-video text-primary me-2"></i>{{ video.original_name }}</h5>
         <p class="text-muted small mb-0">
           Nhóm: <strong>{{ video.group.name }}</strong> &nbsp;|&nbsp;
-          Upload bởi: <strong>{{ video.uploader.full_name or video.uploader.username }}</strong> &nbsp;|&nbsp;
+          Upload bởi: <strong>{{ video.uploader.full_name or video.uploader.email }}</strong> &nbsp;|&nbsp;
           {{ video.uploaded_at.strftime('%d/%m/%Y %H:%M') }} &nbsp;|&nbsp;
           {{ "%.1f"|format(video.file_size/1048576) }} MB
         </p>

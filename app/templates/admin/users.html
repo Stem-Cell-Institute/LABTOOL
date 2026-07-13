@@ -41,10 +41,9 @@
       <table class="table table-hover align-middle mb-0 small">
         <thead class="table-light">
           <tr>
-            <th>Tên đăng nhập</th>
+            <th>Email</th>
             <th>Họ tên</th>
             <th>Loại</th>
-            <th>Email</th>
             <th>Đăng ký lúc</th>
             <th>Duyệt & Gán nhóm</th>
             <th>Từ chối</th>
@@ -53,7 +52,7 @@
         <tbody>
           {% for u in pending %}
           <tr>
-            <td><strong>{{ u.username }}</strong></td>
+            <td><strong>{{ u.email }}</strong></td>
             <td>{{ u.full_name or '—' }}</td>
             <td>
               {% if u.member_type == 'student' %}
@@ -64,7 +63,6 @@
               <span class="badge bg-light text-dark border">NCV</span>
               {% endif %}
             </td>
-            <td class="text-muted">{{ u.email or '—' }}</td>
             <td class="text-muted">{{ u.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
             <td>
               <form method="post" action="/admin/users/{{ u.id }}/approve" class="d-flex gap-2 align-items-center">
@@ -81,7 +79,7 @@
             </td>
             <td>
               <form method="post" action="/admin/users/{{ u.id }}/reject"
-                    onsubmit="return confirm('Từ chối và xoá tài khoản {{ u.username }}?\nHành động này không thể hoàn tác.')">
+                    onsubmit="return confirm('Từ chối và xoá tài khoản {{ u.email }}?\nHành động này không thể hoàn tác.')">
                 <button type="submit" class="btn btn-sm btn-outline-danger">
                   <i class="bi bi-x-lg me-1"></i>Từ chối
                 </button>
@@ -102,7 +100,7 @@
       <table class="table table-hover align-middle mb-0">
         <thead class="table-light">
           <tr>
-            <th>Tên đăng nhập</th>
+            <th>Email</th>
             <th>Họ tên</th>
             <th>Loại</th>
             <th>Nhóm</th>
@@ -117,7 +115,7 @@
         <tbody>
           {% for u in users %}
           <tr {% if not u.is_active %}class="opacity-50"{% endif %}>
-            <td><strong>{{ u.username }}</strong></td>
+            <td><strong>{{ u.email }}</strong></td>
             <td>{{ u.full_name or '—' }}</td>
             <td>
               {% if u.member_type == 'student' %}
@@ -181,13 +179,13 @@
                     {% if u.role == 'admin' %}
                     <button type="submit" class="btn btn-sm btn-outline-danger"
                       title="Thu quyền Admin"
-                      onclick="return confirm('Thu quyền Admin của {{ u.username }}?')">
+                      onclick="return confirm('Thu quyền Admin của {{ u.email }}?')">
                       <i class="bi bi-shield-minus"></i>
                     </button>
                     {% else %}
                     <button type="submit" class="btn btn-sm btn-outline-success"
                       title="Cấp quyền Admin"
-                      onclick="return confirm('Cấp quyền Admin cho {{ u.username }}?')">
+                      onclick="return confirm('Cấp quyền Admin cho {{ u.email }}?')">
                       <i class="bi bi-shield-plus"></i>
                     </button>
                     {% endif %}
@@ -200,14 +198,14 @@
                     <button type="submit" class="btn btn-sm btn-warning"
                       data-bs-toggle="tooltip"
                       title="Đang có quyền xem toàn cảnh — Click để thu lại"
-                      onclick="return confirm('Thu quyền xem báo cáo toàn cảnh của {{ u.username }}?')">
+                      onclick="return confirm('Thu quyền xem báo cáo toàn cảnh của {{ u.email }}?')">
                       <i class="bi bi-eye-slash-fill"></i>
                     </button>
                     {% else %}
                     <button type="submit" class="btn btn-sm btn-outline-warning"
                       data-bs-toggle="tooltip"
                       title="Cấp quyền xem báo cáo toàn cảnh (dành cho Viện trưởng, BGĐ...)"
-                      onclick="return confirm('Cấp quyền xem báo cáo toàn cảnh cho {{ u.username }}?')">
+                      onclick="return confirm('Cấp quyền xem báo cáo toàn cảnh cho {{ u.email }}?')">
                       <i class="bi bi-eye"></i>
                     </button>
                     {% endif %}
@@ -226,14 +224,14 @@
                     <button type="submit" class="btn btn-sm btn-success"
                       data-bs-toggle="tooltip"
                       title="Đang được cấp quyền tự tạo project như NCV — Click để thu lại"
-                      onclick="return confirm('Thu quyền tự tạo project của {{ u.username }}?')">
+                      onclick="return confirm('Thu quyền tự tạo project của {{ u.email }}?')">
                       <i class="bi bi-unlock-fill"></i>
                     </button>
                     {% else %}
                     <button type="submit" class="btn btn-sm btn-outline-success"
                       data-bs-toggle="tooltip"
                       title="Cấp quyền tự tạo project như NCV (VD: NCS được Viện cho hoạt động tự do)"
-                      onclick="return confirm('Cấp quyền tự tạo project cho {{ u.username }}?')">
+                      onclick="return confirm('Cấp quyền tự tạo project cho {{ u.email }}?')">
                       <i class="bi bi-unlock"></i>
                     </button>
                     {% endif %}
@@ -245,13 +243,13 @@
                     {% if u.is_active %}
                     <button type="submit" class="btn btn-sm btn-outline-secondary"
                       title="Vô hiệu hoá tài khoản"
-                      onclick="return confirm('Vô hiệu hoá tài khoản {{ u.username }}?')">
+                      onclick="return confirm('Vô hiệu hoá tài khoản {{ u.email }}?')">
                       <i class="bi bi-person-slash"></i>
                     </button>
                     {% else %}
                     <button type="submit" class="btn btn-sm btn-outline-primary"
                       title="Kích hoạt lại tài khoản"
-                      onclick="return confirm('Kích hoạt lại tài khoản {{ u.username }}?')">
+                      onclick="return confirm('Kích hoạt lại tài khoản {{ u.email }}?')">
                       <i class="bi bi-person-check"></i>
                     </button>
                     {% endif %}
@@ -277,7 +275,7 @@
               <form method="post" action="/admin/users/{{ u.id }}/update">
                 <div class="modal-content">
                   <div class="modal-header">
-                    <h6 class="modal-title fw-bold">Chỉnh sửa: {{ u.username }}</h6>
+                    <h6 class="modal-title fw-bold">Chỉnh sửa: {{ u.email }}</h6>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                   </div>
                   <div class="modal-body">
@@ -286,8 +284,8 @@
                       <input type="text" name="full_name" class="form-control" value="{{ u.full_name }}">
                     </div>
                     <div class="mb-3">
-                      <label class="form-label fw-semibold">Email</label>
-                      <input type="email" name="email" class="form-control" value="{{ u.email }}">
+                      <label class="form-label fw-semibold">Email <span class="text-danger">*</span></label>
+                      <input type="email" name="email" class="form-control" value="{{ u.email }}" required>
                     </div>
                     <div class="mb-3">
                       <label class="form-label fw-semibold">Vai trò</label>
@@ -444,8 +442,8 @@
         <div class="modal-body">
           <div class="row g-3">
             <div class="col-md-6">
-              <label class="form-label fw-semibold">Tên đăng nhập <span class="text-danger">*</span></label>
-              <input type="text" name="username" class="form-control" required>
+              <label class="form-label fw-semibold">Email <span class="text-danger">*</span></label>
+              <input type="email" name="email" class="form-control" required>
             </div>
             <div class="col-md-6">
               <label class="form-label fw-semibold">Mật khẩu <span class="text-danger">*</span></label>
@@ -454,10 +452,6 @@
             <div class="col-md-6">
               <label class="form-label fw-semibold">Họ tên</label>
               <input type="text" name="full_name" class="form-control">
-            </div>
-            <div class="col-md-6">
-              <label class="form-label fw-semibold">Email</label>
-              <input type="email" name="email" class="form-control">
             </div>
             <div class="col-md-6">
               <label class="form-label fw-semibold">Vai trò</label>

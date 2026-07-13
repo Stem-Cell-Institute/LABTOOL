@@ -98,7 +98,11 @@ async def save_notebook(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse(back, status_code=302)
 
     if notebook_id:
-        nb = db.get(Notebook, int(notebook_id))
+        try:
+            notebook_id_int = int(notebook_id)
+        except ValueError:
+            raise HTTPException(status_code=400)
+        nb = db.get(Notebook, notebook_id_int)
         if not nb or not _can_edit_notebook(user, nb):
             raise HTTPException(status_code=403)
         nb.topic_name = topic_name

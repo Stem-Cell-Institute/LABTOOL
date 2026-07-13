@@ -25,7 +25,7 @@
     <div class="alert alert-warning d-flex align-items-center gap-2 mb-3 py-2 small">
       <i class="bi bi-person-badge fs-5"></i>
       <div>
-        Bạn đang sửa nhật ký của <strong>{{ entry.author.full_name or entry.author.username }}</strong> với vai trò quản lý.
+        Bạn đang sửa nhật ký của <strong>{{ entry.author.full_name or entry.author.email }}</strong> với vai trò quản lý.
         Việc sửa sẽ được ghi vào lịch sử kèm tên bạn.
       </div>
     </div>
@@ -130,7 +130,7 @@
           <label class="form-label fw-semibold">File đã đính kèm</label>
           <div class="d-flex flex-wrap gap-2">
             {% for f in entry.files %}
-            {% set furl = '/uploads/diary/' ~ entry.user_id ~ '/' ~ entry.id ~ '/' ~ f.original_name %}
+            {% set furl = '/diary/' ~ entry.id ~ '/file/' ~ f.id %}
             <div class="card border p-2 d-flex flex-row align-items-center gap-2" style="max-width:220px;">
               {% if f.file_type == 'image' %}
               <a href="{{ furl }}" target="_blank"><img src="{{ furl }}" style="width:36px;height:36px;object-fit:cover;border-radius:4px;"></a>

@@ -1,4 +1,5 @@
 import os
+import re
 import threading
 from fastapi import APIRouter, Request, Depends, UploadFile, File, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
@@ -15,6 +16,14 @@ templates = Jinja2Templates(directory="app/templates")
 UPLOAD_DIR = "uploads"
 MAX_UPLOAD_MB = 500
 ALLOWED_EXT = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
+
+
+def _safe_filename(name: str) -> str:
+    """Chỉ giữ tên file thuần (bỏ mọi thành phần thư mục/traversal) và ký tự an toàn,
+    tránh path traversal khi ghép vào đường dẫn lưu trên server."""
+    name = os.path.basename((name or "").replace("\\", "/"))
+    name = re.sub(r'[^\w.\-() ]', '_', name).strip()
+    return name or "file"
 
 
 def _group_upload_dir(group_id: int) -> str:
@@ -170,7 +179,7 @@ async def upload_video(
             status_code=400,
         )
 
-    safe_name = file.filename
+    safe_name = _safe_filename(file.filename)
     save_path = os.path.join(upload_dir, safe_name)
     base, ext2 = os.path.splitext(safe_name)
     counter = 1
@@ -201,7 +210,7 @@ async def upload_video(
     threading.Thread(target=_analyze_in_background, args=(video.id,), daemon=True).start()
 
     log_activity(db, "upload",
-                 f"{user.username} upload: {file.filename}",
+                 f"{user.email} upload: {file.filename}",
                  user_id=user.id, target_type="video",
                  target_id=video.id, group_id=target_group_id)
     return RedirectResponse(f"/videos/{video.id}", status_code=302)
@@ -253,9 +262,19 @@ def reanalyze(video_id: int, request: Request, db: Session = Depends(get_db)):
     if user.role != "admin" and video.group_id != user.group_id:
         raise HTTPException(status_code=403)
 
+    if video.status == "processing":
+        # Đã có 1 lượt phân tích đang chạy cho video này — chặn double-click gửi thêm
+        # request để tránh 2 thread cùng ghi ExperimentLog, gây lỗi unique constraint
+        # khiến thread thất bại đè status "done" của thread thành công thành "failed".
+        request.session["flash"] = "Video đang được phân tích, vui lòng đợi."
+        return RedirectResponse(f"/videos/{video.id}", status_code=302)
+
     if video.log:
         db.delete(video.log)
-    video.status = "pending"
+    # Đặt "processing" ngay tại đây (đồng bộ, trước khi thread nền kịp chạy) để lần
+    # click tiếp theo (nếu có) bị chặn bởi điều kiện ở trên thay vì lọt qua trong lúc
+    # thread nền chưa kịp tự cập nhật status.
+    video.status = "processing"
     video.error_message = ""
     db.commit()
 

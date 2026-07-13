@@ -6,7 +6,7 @@
   <h4 class="mb-0 fw-bold">
     <i class="bi bi-journal-text text-success me-2"></i>
     {{ entry.title or 'Nhật ký #' ~ entry.id }}
-    {% if show_author %}<span class="text-muted fs-6">— {{ entry.author.full_name or entry.author.username }}</span>{% endif %}
+    {% if show_author %}<span class="text-muted fs-6">— {{ entry.author.full_name or entry.author.email }}</span>{% endif %}
   </h4>
   {% if not locked and can_edit %}
   <a href="/diary/{{ entry.id }}/edit" class="btn btn-outline-warning btn-sm ms-auto">
@@ -36,7 +36,7 @@
           {% if entry.updated_at and entry.updated_at != entry.created_at %}
           <span>
             <i class="bi bi-pencil me-1 text-muted"></i>Sửa lần cuối {{ entry.updated_at.strftime('%d/%m/%Y %H:%M') }}
-            {% if entry.last_editor %}bởi <strong>{{ entry.last_editor.full_name or entry.last_editor.username }}</strong>{% if entry.updated_by != entry.user_id %} <span class="badge bg-warning text-dark">quản lý</span>{% endif %}{% endif %}
+            {% if entry.last_editor %}bởi <strong>{{ entry.last_editor.full_name or entry.last_editor.email }}</strong>{% if entry.updated_by != entry.user_id %} <span class="badge bg-warning text-dark">quản lý</span>{% endif %}{% endif %}
           </span>
           {% endif %}
           {% if locked %}
@@ -66,7 +66,7 @@
         <div class="row g-3">
           {% for item in files_view %}
           {% set f = item.f %}
-          {% set url = '/uploads/diary/' ~ entry.user_id ~ '/' ~ entry.id ~ '/' ~ f.original_name %}
+          {% set url = '/diary/' ~ entry.id ~ '/file/' ~ f.id %}
           <div class="col-md-6">
 
             {% set cat_badge = '<span class="badge bg-secondary" style="font-size:.65rem;">thô</span>' if f.category == 'raw' else ('<span class="badge bg-info text-dark" style="font-size:.65rem;">đã xử lý</span>' if f.category == 'processed' else '') %}
@@ -131,7 +131,7 @@
               <button class="accordion-button collapsed py-2" type="button" data-bs-toggle="collapse" data-bs-target="#rev{{ rev.id }}">
                 <span class="small">
                   <i class="bi bi-person-circle me-1"></i>
-                  <strong>{{ rev.editor.full_name or rev.editor.username }}</strong>
+                  <strong>{{ rev.editor.full_name or rev.editor.email }}</strong>
                   {% if rev.edited_by != entry.user_id %}<span class="badge bg-warning text-dark ms-1">quản lý</span>{% endif %}
                   đã sửa lúc {{ rev.edited_at.strftime('%d/%m/%Y %H:%M') }}
                   {% if item.title_changed %}<span class="badge bg-info text-dark ms-1">đổi tiêu đề</span>{% endif %}

@@ -52,11 +52,11 @@
     {% endif %}
 
     <form method="get" action="/check-status">
-      <label class="form-label fw-semibold">Tên đăng nhập của bạn</label>
+      <label class="form-label fw-semibold">Email của bạn</label>
       <div class="input-group mb-3">
-        <span class="input-group-text"><i class="bi bi-at"></i></span>
-        <input type="text" name="username" class="form-control"
-               value="{{ username }}" placeholder="username" required autofocus>
+        <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+        <input type="email" name="email" class="form-control"
+               value="{{ email }}" placeholder="abc@sci.edu.vn" required autofocus>
         <button type="submit" class="btn btn-primary">Kiểm tra</button>
       </div>
     </form>

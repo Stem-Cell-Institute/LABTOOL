@@ -1,5 +1,6 @@
 """Hệ thống báo cáo kết quả nghiên cứu hằng tháng."""
 import os
+import re
 import hashlib
 import threading
 import markdown as md_lib
@@ -7,7 +8,7 @@ import imagehash
 from PIL import Image
 from datetime import datetime
 from fastapi import APIRouter, Request, Depends, Form, UploadFile, File, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -40,6 +41,14 @@ def _get_user(request: Request, db: Session):
 
 def _can_manage(user: User):
     return user.role == "admin" or user.can_view_all
+
+
+def _safe_filename(name: str) -> str:
+    """Chỉ giữ tên file thuần (bỏ mọi thành phần thư mục/traversal) và ký tự an toàn,
+    tránh path traversal khi ghép vào đường dẫn lưu trên server."""
+    name = os.path.basename((name or "").replace("\\", "/"))
+    name = re.sub(r'[^\w.\-() ]', '_', name).strip()
+    return name or "file"
 
 
 def _report_dir(user_id: int, report_id: int) -> str:
@@ -117,7 +126,7 @@ def _analyze_report_background(report_id: int):
                         f"KHÔNG phải kết quả mới của tháng này."
                     )
                 else:
-                    other_name = mr.author.full_name or mr.author.username if mr.author else "?"
+                    other_name = mr.author.full_name or mr.author.email if mr.author else "?"
                     system_warnings.append(
                         f"File '{matched.original_name}' trùng khớp hoàn toàn (SHA-256) với file "
                         f"'{rf.original_name}' đã nộp bởi NGHIÊN CỨU VIÊN KHÁC ({other_name}) trong báo cáo "
@@ -160,7 +169,7 @@ def _analyze_report_background(report_id: int):
                         reported_pairs.add(pair_key)
                         who = (
                             "CHÍNH nghiên cứu viên này" if mr.user_id == report.user_id
-                            else f"NGHIÊN CỨU VIÊN KHÁC ({mr.author.full_name or mr.author.username if mr.author else '?'})"
+                            else f"NGHIÊN CỨU VIÊN KHÁC ({mr.author.full_name or mr.author.email if mr.author else '?'})"
                         )
                         system_warnings.append(
                             f"File '{own_f.original_name}' RẤT GIỐNG (không trùng byte tuyệt đối — có thể đã bị "
@@ -173,7 +182,7 @@ def _analyze_report_background(report_id: int):
         from app import gemini as gem
         analysis = gem.analyze_monthly_report(
             current_content=report.content,
-            researcher_name=report.author.full_name or report.author.username,
+            researcher_name=report.author.full_name or report.author.email,
             month=report.report_month,
             year=report.report_year,
             previous_reports=prev_list,
@@ -483,8 +492,9 @@ async def save_report(
         data = await upload.read()
         if len(data) > 50 * 1024 * 1024:  # 50MB max per file
             continue
-        save_path = os.path.join(report_dir, upload.filename)
-        base, e = os.path.splitext(upload.filename)
+        safe_name = _safe_filename(upload.filename)
+        save_path = os.path.join(report_dir, safe_name)
+        base, e = os.path.splitext(safe_name)
         counter = 1
         while os.path.exists(save_path):
             save_path = os.path.join(report_dir, f"{base}_{counter}{e}")
@@ -520,6 +530,22 @@ async def save_report(
         request.session["flash"] = "Đã lưu bản nháp"
 
     return RedirectResponse(f"/results/{report.id}", status_code=302)
+
+
+@router.get("/results/{report_id}/file/{file_id}")
+def download_file(report_id: int, file_id: int, request: Request, db: Session = Depends(get_db)):
+    user = _get_user(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    report = db.get(MonthlyReport, report_id)
+    if not report:
+        raise HTTPException(status_code=404)
+    if not _can_manage(user) and report.user_id != user.id:
+        raise HTTPException(status_code=403)
+    rf = db.get(ReportFile, file_id)
+    if not rf or rf.report_id != report_id or not os.path.exists(rf.filename):
+        raise HTTPException(status_code=404)
+    return FileResponse(rf.filename, filename=rf.original_name)
 
 
 @router.post("/results/{report_id}/delete-file/{file_id}")
@@ -690,7 +716,7 @@ def review_report(
     db.commit()
 
     label = VERDICT_LABEL.get(manager_decision, ("Đã duyệt", "secondary"))[0]
-    request.session["flash"] = f"Đã duyệt: {label} — {report.author.full_name or report.author.username}"
+    request.session["flash"] = f"Đã duyệt: {label} — {report.author.full_name or report.author.email}"
     return RedirectResponse(f"/results/{report_id}", status_code=302)
 
 
@@ -704,7 +730,7 @@ def _upsert_calibration_example(db: Session, report: MonthlyReport, correct_verd
         db.add(ex)
     ex.report_month = report.report_month
     ex.report_year = report.report_year
-    ex.researcher_name = report.author.full_name or report.author.username
+    ex.researcher_name = report.author.full_name or report.author.email
     ex.context_excerpt = (report.content or "")[:800]
     ex.ai_verdict = report.ai_verdict
     ex.correct_verdict = correct_verdict
@@ -737,6 +763,25 @@ def reanalyze_report(report_id: int, request: Request, db: Session = Depends(get
 
     request.session["flash"] = "Đã kích hoạt phân tích lại. Trang sẽ tự cập nhật khi xong."
     return RedirectResponse(f"/results/{report_id}", status_code=302)
+
+
+@router.get("/results/period-status")
+def current_period_status(request: Request, db: Session = Depends(get_db)):
+    from fastapi.responses import JSONResponse
+    user = _get_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401)
+    now = datetime.utcnow()
+    period = db.query(ReportPeriod).filter(
+        ReportPeriod.report_month == now.month,
+        ReportPeriod.report_year == now.year,
+    ).first()
+    if not period:
+        return JSONResponse({"status": "no_period"})
+    return JSONResponse({
+        "status": "open" if period.is_open else "closed",
+        "deadline": period.deadline.isoformat() if period.deadline else None,
+    })
 
 
 # ════════════════════════════════════════════════════════════════
@@ -782,25 +827,6 @@ def view_report(report_id: int, request: Request, db: Session = Depends(get_db))
     })
 
 
-@router.get("/results/period-status")
-def current_period_status(request: Request, db: Session = Depends(get_db)):
-    from fastapi.responses import JSONResponse
-    user = _get_user(request, db)
-    if not user:
-        raise HTTPException(status_code=401)
-    now = datetime.utcnow()
-    period = db.query(ReportPeriod).filter(
-        ReportPeriod.report_month == now.month,
-        ReportPeriod.report_year == now.year,
-    ).first()
-    if not period:
-        return JSONResponse({"status": "no_period"})
-    return JSONResponse({
-        "status": "open" if period.is_open else "closed",
-        "deadline": period.deadline.isoformat() if period.deadline else None,
-    })
-
-
 @router.get("/results/{report_id}/ai-status")
 def ai_status(report_id: int, request: Request, db: Session = Depends(get_db)):
     user = _get_user(request, db)
@@ -809,5 +835,7 @@ def ai_status(report_id: int, request: Request, db: Session = Depends(get_db)):
     report = db.get(MonthlyReport, report_id)
     if not report:
         raise HTTPException(status_code=404)
+    if not _can_manage(user) and report.user_id != user.id:
+        raise HTTPException(status_code=403)
     from fastapi.responses import JSONResponse
     return JSONResponse({"status": report.ai_status, "verdict": report.ai_verdict})

@@ -10,7 +10,7 @@
         <div>
           <h5 class="fw-bold mb-0">Hồ sơ cá nhân</h5>
           <div class="text-muted small">
-            {{ user.username }}
+            {{ user.email }}
             {% if user.group %}<span class="badge bg-secondary ms-1">{{ user.group.name }}</span>{% endif %}
             <span class="badge bg-{{ 'danger' if user.role == 'admin' else 'info text-dark' }} ms-1">
               {{ 'Admin' if user.role == 'admin' else 'Thành viên' }}
@@ -33,16 +33,13 @@
 
         <form method="post" action="/profile">
           <div class="mb-3">
-            <label class="form-label fw-semibold">Tên đăng nhập</label>
-            <input type="text" class="form-control" value="{{ user.username }}" disabled>
-          </div>
-          <div class="mb-3">
             <label class="form-label fw-semibold">Họ tên <span class="text-danger">*</span></label>
             <input type="text" name="full_name" class="form-control" value="{{ user.full_name }}" required>
           </div>
           <div class="mb-4">
-            <label class="form-label fw-semibold">Email</label>
-            <input type="email" name="email" class="form-control" value="{{ user.email }}" placeholder="(tuỳ chọn)">
+            <label class="form-label fw-semibold">Email <span class="text-danger">*</span></label>
+            <input type="email" name="email" class="form-control" value="{{ user.email }}" required>
+            <div class="form-text">Dùng để đăng nhập — đổi email cũng sẽ đổi thông tin đăng nhập lần sau.</div>
           </div>
 
           <hr>

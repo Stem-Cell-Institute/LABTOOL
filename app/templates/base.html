@@ -77,12 +77,12 @@
         <a class="btn btn-sm btn-light text-primary fw-semibold dropdown-toggle d-flex align-items-center gap-1"
            href="#" data-bs-toggle="dropdown">
           <i class="bi bi-person-circle"></i>
-          <span class="d-none d-sm-inline">{{ user.full_name or user.username }}</span>
+          <span class="d-none d-sm-inline">{{ user.full_name or user.email }}</span>
           {% if user.group %}<span class="badge bg-primary ms-1">{{ user.group.name }}</span>{% endif %}
         </a>
         <ul class="dropdown-menu dropdown-menu-end">
           <li class="dropdown-header text-muted small">
-            {{ user.full_name or user.username }}
+            {{ user.full_name or user.email }}
             {% if user.role == 'admin' %}
               <span class="badge bg-danger ms-1">Admin</span>
             {% elif user.can_view_all %}

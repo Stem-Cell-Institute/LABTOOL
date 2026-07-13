@@ -40,7 +40,7 @@
               {% set dec = r.manager_decision or r.ai_verdict %}
               {% set lbl = verdict_label.get(dec, ('Chờ', 'secondary')) %}
               <tr>
-                <td class="fw-semibold">{{ r.author.full_name or r.author.username }}</td>
+                <td class="fw-semibold">{{ r.author.full_name or r.author.email }}</td>
                 <td><span class="badge bg-secondary">{{ r.group.name }}</span></td>
                 <td class="text-muted">{{ r.submitted_at.strftime('%d/%m %H:%M') if r.submitted_at else '—' }}</td>
                 <td>
@@ -89,7 +89,7 @@
           {% if u.group %}<div class="list-group-item list-group-item-secondary py-1 small fw-semibold border-0">{{ u.group.name }}</div>{% endif %}
           {% endif %}
           <div class="list-group-item border-0 d-flex justify-content-between align-items-center px-3 py-2">
-            <span class="small fw-semibold">{{ u.full_name or u.username }}</span>
+            <span class="small fw-semibold">{{ u.full_name or u.email }}</span>
             <span class="badge bg-danger bg-opacity-15 text-danger border border-danger border-opacity-25 small">Chưa nộp</span>
           </div>
           {% endfor %}

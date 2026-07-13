@@ -105,7 +105,7 @@
               </td>
               <td>
                 {% if p.closed_by and p.closer %}
-                  <span class="text-muted">{{ p.closer.full_name or p.closer.username }}</span>
+                  <span class="text-muted">{{ p.closer.full_name or p.closer.email }}</span>
                   <div style="font-size:.72rem;" class="text-muted">{{ p.closed_at.strftime('%d/%m/%Y %H:%M') if p.closed_at else '' }}</div>
                 {% else %}
                   <span class="text-muted">—</span>

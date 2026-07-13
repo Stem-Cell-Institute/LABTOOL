@@ -13,12 +13,11 @@ Base.metadata.create_all(bind=engine)
 db = SessionLocal()
 
 try:
-    existing = db.query(User).filter(User.username == "admin").first()
+    existing = db.query(User).filter(User.email == "admin@vientebaogoc.vn").first()
     if existing:
         print("Admin user da ton tai, bo qua.")
     else:
         admin = User(
-            username="admin",
             password_hash=hash_password("admin123"),
             full_name="Quản Trị Viên",
             email="admin@vientebaogoc.vn",
@@ -30,7 +29,7 @@ try:
         print("=" * 50)
         print("[OK] Database da san sang!")
         print("[OK] Admin user da duoc tao:")
-        print("     Username : admin")
+        print("     Email    : admin@vientebaogoc.vn")
         print("     Password : admin123")
         print("[!]  Hay doi mat khau ngay sau khi dang nhap lan dau!")
         print("=" * 50)

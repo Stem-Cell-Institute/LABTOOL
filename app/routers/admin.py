@@ -1,4 +1,5 @@
 import os
+import logging
 import threading
 from fastapi import APIRouter, Request, Depends, Form, HTTPException, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -12,6 +13,7 @@ from app.activity import log_activity
 
 router = APIRouter(prefix="/admin")
 templates = Jinja2Templates(directory="app/templates")
+logger = logging.getLogger(__name__)
 
 ALLOWED_EXT = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
 
@@ -21,7 +23,7 @@ def _get_admin(request: Request, db: Session):
     if not uid:
         return None
     user = db.get(User, uid)
-    return user if (user and user.role == "admin") else None
+    return user if (user and user.is_active and user.role == "admin") else None
 
 
 def _get_report_viewer(request: Request, db: Session):
@@ -56,7 +58,7 @@ async def upload_logo(
     with open("static/logo.png", "wb") as f:
         f.write(content)
 
-    log_activity(db, "upload_logo", f"Admin '{admin.username}' cap nhat logo he thong",
+    log_activity(db, "upload_logo", f"Admin '{admin.email}' cap nhat logo he thong",
                  user_id=admin.id)
     request.session["flash"] = "Đã cập nhật logo hệ thống thành công"
     return RedirectResponse("/admin/users", status_code=302)
@@ -134,7 +136,7 @@ def users_page(request: Request, db: Session = Depends(get_db)):
     if not admin:
         return RedirectResponse("/login", status_code=302)
     pending = db.query(User).filter(User.is_approved == False).order_by(User.created_at).all()
-    users = db.query(User).filter(User.is_approved == True).order_by(User.username).all()
+    users = db.query(User).filter(User.is_approved == True).order_by(User.email).all()
     groups = db.query(Group).order_by(Group.name).all()
     flash = request.session.pop("flash", None)
     return templates.TemplateResponse(
@@ -169,9 +171,9 @@ def approve_user(
     target.is_approved = True
     target.group_id = group_id if group_id else None
     db.commit()
-    log_activity(db, "toggle_active", f"Admin duyet tai khoan '{target.username}'",
+    log_activity(db, "toggle_active", f"Admin duyet tai khoan '{target.email}'",
                  user_id=admin.id, target_type="user", target_id=target.id)
-    request.session["flash"] = f"Đã duyệt tài khoản '{target.username}'"
+    request.session["flash"] = f"Đã duyệt tài khoản '{target.email}'"
     return RedirectResponse("/admin/users", status_code=302)
 
 
@@ -183,10 +185,10 @@ def reject_user(user_id: int, request: Request, db: Session = Depends(get_db)):
     target = db.get(User, user_id)
     if not target or target.is_approved:
         return RedirectResponse("/admin/users", status_code=302)
-    username = target.username
+    email = target.email
     db.delete(target)
     db.commit()
-    request.session["flash"] = f"Đã từ chối và xoá tài khoản đăng ký '{username}'"
+    request.session["flash"] = f"Đã từ chối và xoá tài khoản đăng ký '{email}'"
     return RedirectResponse("/admin/users", status_code=302)
 
 
@@ -196,9 +198,8 @@ MEMBER_TYPES = ("researcher", "student", "ncs")
 @router.post("/users/create")
 def create_user(
     request: Request,
-    username: str = Form(...),
     full_name: str = Form(""),
-    email: str = Form(""),
+    email: str = Form(...),
     password: str = Form(...),
     role: str = Form("member"),
     member_type: str = Form("researcher"),
@@ -210,20 +211,21 @@ def create_user(
     if not admin:
         return RedirectResponse("/login", status_code=302)
 
-    if db.query(User).filter(User.username == username).first():
-        users = db.query(User).order_by(User.username).all()
+    email = email.strip().lower()
+    if db.query(User).filter(User.email == email).first():
+        pending = db.query(User).filter(User.is_approved == False).order_by(User.created_at).all()
+        users = db.query(User).filter(User.is_approved == True).order_by(User.email).all()
         groups = db.query(Group).order_by(Group.name).all()
         return templates.TemplateResponse(
             request, "admin/users.html",
-            {"user": admin, "users": users, "groups": groups,
-             "error": f"Ten dang nhap '{username}' da ton tai"},
+            {"user": admin, "users": users, "pending": pending, "groups": groups,
+             "error": f"Email '{email}' da ton tai"},
         )
 
     actual_role = "admin" if role == "admin" else "member"
     can_view = role == "vien_truong"
     actual_member_type = member_type if member_type in MEMBER_TYPES else "researcher"
     new_user = User(
-        username=username,
         full_name=full_name,
         email=email,
         password_hash=hash_password(password),
@@ -236,9 +238,9 @@ def create_user(
     )
     db.add(new_user)
     db.commit()
-    log_activity(db, "create_user", f"Admin tao tai khoan '{username}' ({role})",
+    log_activity(db, "create_user", f"Admin tao tai khoan '{email}' ({role})",
                  user_id=admin.id, target_type="user", target_id=new_user.id)
-    request.session["flash"] = f"Da tao tai khoan '{username}'"
+    request.session["flash"] = f"Da tao tai khoan '{email}'"
     return RedirectResponse("/admin/users", status_code=302)
 
 
@@ -261,10 +263,17 @@ def update_user(
     target = db.get(User, user_id)
     if not target:
         raise HTTPException(status_code=404)
+
+    email_norm = email.strip().lower()
+    if email_norm and email_norm != target.email and db.query(User).filter(User.email == email_norm).first():
+        request.session["flash"] = f"error:Email '{email_norm}' da duoc dung boi tai khoan khac."
+        return RedirectResponse("/admin/users", status_code=302)
+
     actual_role = "admin" if role == "admin" else "member"
     can_view = role == "vien_truong"
     target.full_name = full_name
-    target.email = email
+    if email_norm:
+        target.email = email_norm
     target.role = actual_role
     target.member_type = member_type if member_type in MEMBER_TYPES else "researcher"
     target.can_create_project = bool(can_create_project)
@@ -273,7 +282,7 @@ def update_user(
     if new_password:
         target.password_hash = hash_password(new_password)
     db.commit()
-    request.session["flash"] = f"Da cap nhat tai khoan '{target.username}'"
+    request.session["flash"] = f"Da cap nhat tai khoan '{target.email}'"
     return RedirectResponse("/admin/users", status_code=302)
 
 
@@ -294,10 +303,10 @@ def toggle_admin(user_id: int, request: Request, db: Session = Depends(get_db)):
 
     if target.role == "admin":
         target.role = "member"
-        msg = f"Da thu quyen Admin cua '{target.username}'"
+        msg = f"Da thu quyen Admin cua '{target.email}'"
     else:
         target.role = "admin"
-        msg = f"Da cap quyen Admin cho '{target.username}'"
+        msg = f"Da cap quyen Admin cho '{target.email}'"
 
     db.commit()
     log_activity(db, "toggle_admin", msg,
@@ -324,7 +333,7 @@ def toggle_active(user_id: int, request: Request, db: Session = Depends(get_db))
     target.is_active = not target.is_active
     action = "kich hoat" if target.is_active else "vo hieu hoa"
     db.commit()
-    msg = f"Da {action} tai khoan '{target.username}'"
+    msg = f"Da {action} tai khoan '{target.email}'"
     log_activity(db, "toggle_active", msg,
                  user_id=admin.id, target_type="user", target_id=target.id)
     request.session["flash"] = msg
@@ -357,8 +366,15 @@ def _scan_folder_background(group_id: int, folder_path: str, uploader_id: int):
             db.commit()
             db.refresh(video)
             threading.Thread(target=_analyze_in_background, args=(video.id,), daemon=True).start()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.exception("Loi quet thu muc group_id=%s folder=%s", group_id, folder_path)
+        try:
+            log_activity(db, "scan_failed",
+                         f"Loi quet thu muc '{folder_path}': {str(e)[:300]}",
+                         user_id=uploader_id, target_type="group", target_id=group_id,
+                         group_id=group_id)
+        except Exception:
+            pass
     finally:
         db.close()
 
@@ -464,7 +480,7 @@ def activity_page(
     db: Session = Depends(get_db),
     action: str = "",
     group_id: int = None,
-    username: str = "",
+    email: str = "",
     limit: int = 100,
 ):
     from app.models import ActivityLog
@@ -478,8 +494,8 @@ def activity_page(
         q = q.filter(ActivityLog.action == action)
     if group_id:
         q = q.filter(ActivityLog.group_id == group_id)
-    if username:
-        u = db.query(User).filter(User.username.ilike(f"%{username}%")).first()
+    if email:
+        u = db.query(User).filter(User.email.ilike(f"%{email}%")).first()
         if u:
             q = q.filter(ActivityLog.user_id == u.id)
         else:
@@ -499,7 +515,7 @@ def activity_page(
         "user": admin, "logs": logs, "user_cache": user_cache,
         "action_meta": ACTION_META, "groups": groups,
         "filter_action": action, "filter_group": group_id,
-        "filter_username": username, "limit": limit,
+        "filter_email": email, "limit": limit,
     })
 
 
@@ -546,7 +562,7 @@ def toggle_view_all(user_id: int, request: Request, db: Session = Depends(get_db
     target.can_view_all = not target.can_view_all
     action = "cap" if target.can_view_all else "thu"
     db.commit()
-    msg = f"Da {action} quyen xem bao cao toan canh cho '{target.username}'"
+    msg = f"Da {action} quyen xem bao cao toan canh cho '{target.email}'"
     log_activity(db, "toggle_admin", msg, user_id=admin.id, target_type="user", target_id=target.id)
     request.session["flash"] = msg
     return RedirectResponse("/admin/users", status_code=302)
@@ -567,7 +583,7 @@ def toggle_create_project(user_id: int, request: Request, db: Session = Depends(
     target.can_create_project = not target.can_create_project
     action = "cap" if target.can_create_project else "thu"
     db.commit()
-    msg = f"Da {action} quyen tu tao project cho '{target.username}'"
+    msg = f"Da {action} quyen tu tao project cho '{target.email}'"
     log_activity(db, "toggle_admin", msg, user_id=admin.id, target_type="user", target_id=target.id)
     request.session["flash"] = msg
     return RedirectResponse("/admin/users", status_code=302)
@@ -599,11 +615,11 @@ def reports_page(
     if group_id:
         users = (db.query(User)
                    .filter(User.group_id == group_id, User.is_active == True)
-                   .order_by(User.full_name, User.username).all())
+                   .order_by(User.full_name, User.email).all())
     else:
         users = (db.query(User)
                    .filter(User.is_active == True)
-                   .order_by(User.group_id, User.full_name, User.username).all())
+                   .order_by(User.group_id, User.full_name, User.email).all())
 
     # All videos for selected year (+ group filter)
     q = db.query(Video).filter(Video.report_year == year)
@@ -663,11 +679,11 @@ def reports_month_detail(
     if group_id:
         all_users = (db.query(User)
                        .filter(User.group_id == group_id, User.is_active == True)
-                       .order_by(User.group_id, User.username).all())
+                       .order_by(User.group_id, User.email).all())
     else:
         all_users = (db.query(User)
                        .filter(User.is_active == True)
-                       .order_by(User.group_id, User.username).all())
+                       .order_by(User.group_id, User.email).all())
 
     submitted_user_ids = {v.uploaded_by for v in videos}
 
@@ -962,6 +978,10 @@ def open_period(
     admin = _get_admin(request, db)
     if not admin:
         return RedirectResponse("/login", status_code=302)
+
+    if not 1 <= report_month <= 12:
+        request.session["flash"] = "error:Tháng không hợp lệ."
+        return RedirectResponse("/admin/report-periods", status_code=302)
 
     from datetime import datetime as _dt
     deadline = None

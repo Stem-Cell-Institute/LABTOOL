@@ -14,14 +14,20 @@ from app.routers import auth, dashboard, videos, logs, comments, admin, results,
 Base.metadata.create_all(bind=engine)
 sync_schema()
 
-SECRET_KEY = os.getenv("SECRET_KEY", "change-me-in-production-vienbao-2025")
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError(
+        "SECRET_KEY chưa được đặt trong .env — không thể khởi động an toàn. "
+        "Xem .env.example để biết cách cấu hình."
+    )
 
 app = FastAPI(title="VidNote — Viện Tế Bào Gốc", docs_url=None, redoc_url=None)
 
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, max_age=86400 * 7)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+# KHÔNG mount /uploads công khai — file trong đây (video, nhật ký, minh chứng báo cáo)
+# phải đi qua route có kiểm tra quyền (xem diary.py, results.py, videos.py).
 
 app.include_router(auth.router)
 app.include_router(dashboard.router)

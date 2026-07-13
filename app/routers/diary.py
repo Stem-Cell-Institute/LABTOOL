@@ -1,9 +1,10 @@
 """Nhật ký thí nghiệm — nghiên cứu viên tự ghi, khoá vĩnh viễn sau N ngày."""
 import os
+import re
 import difflib
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Request, Depends, Form, UploadFile, File, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -109,6 +110,14 @@ def _can_view(user: User, entry: DailyLog, db: Session) -> bool:
     )
 
 
+def _safe_filename(name: str) -> str:
+    """Chỉ giữ tên file thuần (bỏ mọi thành phần thư mục/traversal) và ký tự an toàn,
+    tránh path traversal khi ghép vào đường dẫn lưu trên server."""
+    name = os.path.basename((name or "").replace("\\", "/"))
+    name = re.sub(r'[^\w.\-() ]', '_', name).strip()
+    return name or "file"
+
+
 def _entry_dir(user_id: int, log_id: int) -> str:
     path = os.path.join(DIARY_UPLOAD_DIR, str(user_id), str(log_id))
     os.makedirs(path, exist_ok=True)
@@ -137,8 +146,9 @@ async def _save_uploads(entry_dir: str, entry_id: int, uploads, category: str, d
             rejected.append(f"{upload.filename} (vượt quá 50MB)")
             continue
 
-        save_path = os.path.join(entry_dir, upload.filename)
-        base, e = os.path.splitext(upload.filename)
+        safe_name = _safe_filename(upload.filename)
+        save_path = os.path.join(entry_dir, safe_name)
+        base, e = os.path.splitext(safe_name)
         counter = 1
         while os.path.exists(save_path):
             save_path = os.path.join(entry_dir, f"{base}_{counter}{e}")
@@ -392,6 +402,20 @@ async def save_entry(
     return RedirectResponse(f"/diary/{entry.id}", status_code=302)
 
 
+@router.get("/diary/{log_id}/file/{file_id}")
+def download_file(log_id: int, file_id: int, request: Request, db: Session = Depends(get_db)):
+    user = _get_user(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    entry = db.get(DailyLog, log_id)
+    if not entry or not _can_view(user, entry, db):
+        raise HTTPException(status_code=403)
+    rf = db.get(DailyLogFile, file_id)
+    if not rf or rf.log_id != log_id or not os.path.exists(rf.filename):
+        raise HTTPException(status_code=404)
+    return FileResponse(rf.filename, filename=rf.original_name)
+
+
 @router.post("/diary/{log_id}/delete-file/{file_id}")
 def delete_file(log_id: int, file_id: int, request: Request, db: Session = Depends(get_db)):
     user = _get_user(request, db)
@@ -486,7 +510,7 @@ def diary_overview(
                   DailyLog.title.ilike(like),
                   DailyLog.content.ilike(like),
                   User.full_name.ilike(like),
-                  User.username.ilike(like),
+                  User.email.ilike(like),
                   Group.name.ilike(like),
                   Project.name.ilike(like),
                   Notebook.topic_name.ilike(like),

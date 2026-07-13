@@ -52,7 +52,7 @@
               {% for sp in sub_projects %}
               <tr>
                 <td>{{ sp.name }}</td>
-                <td>{{ sp.owner.full_name or sp.owner.username }}</td>
+                <td>{{ sp.owner.full_name or sp.owner.email }}</td>
                 <td class="text-muted small">{{ sp.members|length }}</td>
                 <td><a href="/projects/{{ sp.id }}" class="btn btn-sm btn-outline-secondary">Xem</a></td>
               </tr>
@@ -87,7 +87,7 @@
             <tbody>
               {% for e in logs %}
               <tr>
-                <td>{{ e.author.full_name or e.author.username }}</td>
+                <td>{{ e.author.full_name or e.author.email }}</td>
                 <td>{{ e.title or ('Nhật ký #' ~ e.id) }}</td>
                 <td class="text-muted small">{{ e.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
                 <td><a href="/diary/{{ e.id }}" class="btn btn-sm btn-outline-secondary">Xem</a></td>
@@ -132,12 +132,12 @@
           {% for m in members %}
           <div class="d-flex justify-content-between align-items-center">
             <div class="small">
-              {{ m.user.full_name or m.user.username }}
+              {{ m.user.full_name or m.user.email }}
               {% if m.user_id == project.owner_id %}<span class="badge bg-light text-dark border ms-1" style="font-size:.65rem;">quản lý project</span>{% endif %}
             </div>
             {% if can_manage_project and m.user_id != project.owner_id %}
             <form method="post" action="/projects/{{ project.id }}/remove-member/{{ m.user_id }}"
-                  onsubmit="return confirm('Xoá {{ m.user.full_name or m.user.username }} khỏi project?')">
+                  onsubmit="return confirm('Xoá {{ m.user.full_name or m.user.email }} khỏi project?')">
               <button type="submit" class="btn btn-link btn-sm p-0 text-danger"><i class="bi bi-x-lg"></i></button>
             </form>
             {% endif %}
@@ -148,7 +148,7 @@
         {% if can_manage_project %}
         <hr>
         <form method="post" action="/projects/{{ project.id }}/add-member" class="d-flex gap-2">
-          <input type="text" name="username" class="form-control form-control-sm" placeholder="Username thành viên" required>
+          <input type="email" name="email" class="form-control form-control-sm" placeholder="Email thành viên" required>
           <button type="submit" class="btn btn-sm" style="background:#c2410c;color:#fff;">Thêm</button>
         </form>
         {% endif %}

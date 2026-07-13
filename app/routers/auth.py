@@ -10,6 +10,7 @@ from app.activity import log_activity
 from app.security import (
     is_login_locked, record_failed_login, clear_failed_logins,
     is_reg_limited, record_reg_attempt,
+    is_status_check_limited, record_status_check,
     check_password,
 )
 
@@ -20,8 +21,10 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 def _client_ip(request: Request) -> str:
-    forwarded = request.headers.get("X-Forwarded-For")
-    return forwarded.split(",")[0].strip() if forwarded else (request.client.host or "unknown")
+    # KHÔNG dùng X-Forwarded-For: app chạy trực tiếp (không qua reverse proxy — xem
+    # DEPLOY.md), nên header này do chính client tự gửi và có thể giả mạo tuỳ ý để
+    # né khoá đăng nhập/giới hạn đăng ký theo IP.
+    return request.client.host or "unknown"
 
 
 # ── Đăng nhập ─────────────────────────────────────────────────────────────────
@@ -37,7 +40,7 @@ def login_page(request: Request):
 @router.post("/login")
 def login(
     request: Request,
-    username: str = Form(...),
+    email: str = Form(...),
     password: str = Form(...),
     db: Session = Depends(get_db),
 ):
@@ -52,14 +55,14 @@ def login(
             "error": f"Quá nhiều lần đăng nhập sai. Vui lòng thử lại sau {mins} phút {secs} giây.",
         }, status_code=429)
 
-    user = db.query(User).filter(User.username == username).first()
+    user = db.query(User).filter(User.email == email.strip().lower()).first()
 
     if not user or not verify_password(password, user.password_hash):
         record_failed_login(ip)
         locked2, _ = is_login_locked(ip)
         extra = " Tài khoản tạm thời bị khoá." if locked2 else ""
         return templates.TemplateResponse(request, "login.html", {
-            "error": f"Tên đăng nhập hoặc mật khẩu không đúng.{extra}",
+            "error": f"Email hoặc mật khẩu không đúng.{extra}",
         }, status_code=401)
 
     if not user.is_approved:
@@ -75,7 +78,7 @@ def login(
 
     clear_failed_logins(ip)
     request.session["user_id"] = user.id
-    log_activity(db, "login", f"{user.username} dang nhap",
+    log_activity(db, "login", f"{user.email} dang nhap",
                  user_id=user.id, group_id=user.group_id)
     return RedirectResponse("/", status_code=302)
 
@@ -103,7 +106,6 @@ def register(
     # thô thay vì render lại register.html — nên validate rỗng thủ công bên dưới thay vì
     # dựa vào Form(...) để đảm bảo luôn hiện đúng thông báo tiếng Việt.
     full_name: str = Form(""),
-    username: str = Form(""),
     password: str = Form(""),
     confirm_password: str = Form(""),
     email: str = Form(""),
@@ -113,7 +115,7 @@ def register(
 ):
     ip = _client_ip(request)
     member_type = member_type if member_type in ("researcher", "student", "ncs") else "researcher"
-    form_data = {"full_name": full_name, "username": username, "email": email, "reason": reason,
+    form_data = {"full_name": full_name, "email": email, "reason": reason,
                  "member_type": member_type}
 
     def err(msg):
@@ -125,14 +127,10 @@ def register(
         return err("Quá nhiều yêu cầu đăng ký từ thiết bị này. Vui lòng thử lại sau 1 giờ.")
 
     # Validate
-    if len(username.strip()) < 3:
-        return err("Tên đăng nhập phải có ít nhất 3 ký tự.")
-    if not username.replace("_", "").replace("-", "").isalnum():
-        return err("Tên đăng nhập chỉ được dùng chữ cái, số, dấu gạch dưới hoặc gạch ngang.")
     if not full_name.strip():
         return err("Vui lòng nhập họ tên đầy đủ.")
     if not email.strip():
-        return err("Vui lòng nhập email — dùng để liên hệ và nhận thông báo từ Viện.")
+        return err("Vui lòng nhập email — dùng để đăng nhập và nhận thông báo từ Viện.")
     if not EMAIL_RE.match(email.strip()):
         return err("Địa chỉ email không hợp lệ.")
 
@@ -141,13 +139,13 @@ def register(
         return err(pw_err)
     if password != confirm_password:
         return err("Mật khẩu xác nhận không khớp.")
-    if db.query(User).filter(User.username == username.strip()).first():
-        return err(f"Tên đăng nhập '{username}' đã tồn tại. Vui lòng chọn tên khác.")
+    email_norm = email.strip().lower()
+    if db.query(User).filter(User.email == email_norm).first():
+        return err(f"Email '{email}' đã được đăng ký. Vui lòng dùng email khác hoặc đăng nhập.")
 
     new_user = User(
-        username=username.strip().lower(),
         full_name=full_name.strip(),
-        email=email.strip(),
+        email=email_norm,
         password_hash=hash_password(password),
         role="member",
         member_type=member_type,
@@ -161,7 +159,7 @@ def register(
 
     note = f" | Ghi chú: {reason.strip()}" if reason.strip() else ""
     log_activity(db, "register",
-                 f"NCV '{username}' dang ky tai khoan moi (cho duyet){note}",
+                 f"NCV '{email_norm}' dang ky tai khoan moi (cho duyet){note}",
                  user_id=new_user.id)
 
     request.session["flash"] = (
@@ -174,10 +172,16 @@ def register(
 # ── Kiểm tra trạng thái đăng ký ──────────────────────────────────────────────
 
 @router.get("/check-status", response_class=HTMLResponse)
-def check_status(request: Request, username: str = "", db: Session = Depends(get_db)):
+def check_status(request: Request, email: str = "", db: Session = Depends(get_db)):
     status = None
-    if username:
-        user = db.query(User).filter(User.username == username.strip().lower()).first()
+    if email:
+        ip = _client_ip(request)
+        if is_status_check_limited(ip):
+            status = ("rate_limited", "Bạn đã kiểm tra quá nhiều lần. Vui lòng thử lại sau ít phút.")
+            return templates.TemplateResponse(request, "check_status.html",
+                                              {"email": email, "status": status})
+        record_status_check(ip)
+        user = db.query(User).filter(User.email == email.strip().lower()).first()
         if not user:
             status = ("not_found", "Không tìm thấy tài khoản này.")
         elif not user.is_approved:
@@ -187,7 +191,7 @@ def check_status(request: Request, username: str = "", db: Session = Depends(get
         else:
             status = ("approved", "Tài khoản đã được duyệt! Bạn có thể đăng nhập ngay.")
     return templates.TemplateResponse(request, "check_status.html",
-                                      {"username": username, "status": status})
+                                      {"email": email, "status": status})
 
 
 # ── Hồ sơ cá nhân ────────────────────────────────────────────────────────────
@@ -198,6 +202,9 @@ def profile_page(request: Request, db: Session = Depends(get_db)):
     if not user_id:
         return RedirectResponse("/login", status_code=302)
     user = db.get(User, user_id)
+    if not user or not user.is_active:
+        request.session.clear()
+        return RedirectResponse("/login", status_code=302)
     flash = request.session.pop("flash", None)
     return templates.TemplateResponse(request, "profile.html", {"user": user, "flash": flash})
 
@@ -216,9 +223,23 @@ def update_profile(
     if not user_id:
         return RedirectResponse("/login", status_code=302)
     user = db.get(User, user_id)
+    if not user or not user.is_active:
+        request.session.clear()
+        return RedirectResponse("/login", status_code=302)
+
+    email_norm = email.strip().lower()
+    if not email_norm:
+        return templates.TemplateResponse(request, "profile.html",
+            {"user": user, "error": "Email không được để trống — dùng để đăng nhập."})
+    if not EMAIL_RE.match(email_norm):
+        return templates.TemplateResponse(request, "profile.html",
+            {"user": user, "error": "Địa chỉ email không hợp lệ."})
+    if email_norm != user.email and db.query(User).filter(User.email == email_norm).first():
+        return templates.TemplateResponse(request, "profile.html",
+            {"user": user, "error": f"Email '{email}' đã được dùng bởi tài khoản khác."})
 
     user.full_name = full_name.strip()
-    user.email = email.strip()
+    user.email = email_norm
 
     if new_password:
         if not current_password:

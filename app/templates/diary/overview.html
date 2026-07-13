@@ -28,7 +28,7 @@
         <select name="user_id" class="form-select form-select-sm" onchange="this.form.submit()">
           <option value="">Tất cả</option>
           {% for m in members %}
-          <option value="{{ m.id }}" {% if selected_user == m.id %}selected{% endif %}>{{ m.full_name or m.username }}</option>
+          <option value="{{ m.id }}" {% if selected_user == m.id %}selected{% endif %}>{{ m.full_name or m.email }}</option>
           {% endfor %}
         </select>
       </div>
@@ -74,7 +74,7 @@
           {% for e in entries %}
           {% set locked = is_locked(e) %}
           <tr>
-            <td>{{ e.author.full_name or e.author.username }}</td>
+            <td>{{ e.author.full_name or e.author.email }}</td>
             <td>{{ e.group.name if e.group else '—' }}</td>
             <td>
               {% if e.project %}

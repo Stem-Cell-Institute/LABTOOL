@@ -7,7 +7,7 @@
   <h4 class="mb-0 fw-bold">
     <i class="bi bi-clipboard2-data text-primary me-2"></i>
     Báo cáo {{ months[report.report_month] }}/{{ report.report_year }}
-    — {{ report.author.full_name or report.author.username }}
+    — {{ report.author.full_name or report.author.email }}
   </h4>
   {% if report.status in ('draft', 'submitted') and not can_manage %}
   <a href="/results/{{ report.id }}/edit" class="btn btn-outline-warning btn-sm ms-auto">
@@ -65,12 +65,12 @@
           <div class="col-md-6">
             {% if f.file_type == 'image' %}
             <div class="text-center border rounded-3 p-2">
-              <img src="/uploads/results/{{ report.user_id }}/{{ report.id }}/{{ f.original_name }}"
+              <img src="/results/{{ report.id }}/file/{{ f.id }}"
                    class="img-fluid rounded" style="max-height:200px;" alt="{{ f.original_name }}">
               <div class="small text-muted mt-1">{{ f.original_name }}</div>
             </div>
             {% else %}
-            <a href="/uploads/results/{{ report.user_id }}/{{ report.id }}/{{ f.original_name }}"
+            <a href="/results/{{ report.id }}/file/{{ f.id }}"
                class="card border text-decoration-none d-flex flex-row align-items-center gap-3 p-3" target="_blank">
               <i class="bi bi-file-pdf fs-3 text-danger"></i>
               <div>
@@ -187,7 +187,7 @@
         </div>
         {% endif %}
         <div class="text-muted small">
-          Duyệt bởi: {{ report.reviewer.full_name or report.reviewer.username if report.reviewer else '—' }}
+          Duyệt bởi: {{ report.reviewer.full_name or report.reviewer.email if report.reviewer else '—' }}
           <br>{{ report.reviewed_at.strftime('%d/%m/%Y %H:%M') if report.reviewed_at else '' }}
         </div>
         <hr>
