@@ -1,10 +1,10 @@
 @echo off
 chcp 65001 >nul
 cd /d "%~dp0"
-title VidNote - Vien Te Bao Goc
+title SCI Portal - Vien Te Bao Goc
 
 echo ================================================
-echo   VIDNOTE - VIEN TE BAO GOC
+echo   SCI PORTAL - VIEN TE BAO GOC
 echo ================================================
 echo.
 

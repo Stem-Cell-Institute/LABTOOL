@@ -22,7 +22,7 @@ if not SECRET_KEY:
         "Xem .env.example để biết cách cấu hình."
     )
 
-app = FastAPI(title="VidNote — Viện Tế Bào Gốc", docs_url=None, redoc_url=None)
+app = FastAPI(title="SCI Portal — Viện Tế Bào Gốc", docs_url=None, redoc_url=None)
 
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, max_age=86400 * 7)
 

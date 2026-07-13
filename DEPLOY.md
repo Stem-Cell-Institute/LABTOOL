@@ -1,4 +1,4 @@
-# Hướng dẫn Deploy — STIMS-SCI
+# Hướng dẫn Deploy — SCI Portal
 
 ## Yêu cầu
 
@@ -47,8 +47,8 @@ python migrate.py
 ```
 
 Lệnh này tạo file `labtool.db` và tài khoản admin mặc định:
-- Username: `admin`
-- Password: `admin123` → **đổi ngay sau khi đăng nhập lần đầu**
+- Email: `admin@vientebaogoc.vn`
+- Password: `admin123` → **đổi ngay sau khi đăng nhập lần đầu** (vào Hồ sơ để đổi cả email lẫn mật khẩu)
 
 ### 5. Chạy ứng dụng
 
@@ -65,9 +65,9 @@ Truy cập tại: `http://<IP-server>:8000`
 Dùng **NSSM** (tải tại nssm.cc):
 
 ```bash
-nssm install STIMS-SCI "C:\Python310\python.exe" "C:\labtool\run.py"
-nssm set STIMS-SCI AppDirectory "C:\labtool"
-nssm start STIMS-SCI
+nssm install SCI-Portal "C:\Python310\python.exe" "C:\labtool\run.py"
+nssm set SCI-Portal AppDirectory "C:\labtool"
+nssm start SCI-Portal
 ```
 
 ---
@@ -91,5 +91,5 @@ labtool/
 ```bash
 git pull
 python migrate.py
-# restart service STIMS-SCI (hoặc Ctrl+C rồi python run.py lại)
+# restart service SCI-Portal (hoặc Ctrl+C rồi python run.py lại)
 ```
