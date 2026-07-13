@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}Tổng quan nhật ký thí nghiệm{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="fw-bold mb-0"><i class="bi bi-journal-text text-success me-2"></i>Tổng quan nhật ký thí nghiệm</h4>
+  {% if user.role == 'admin' %}
+  <a href="/admin/diary-settings" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-sliders me-1"></i>Cài đặt khoá nhật ký
+  </a>
+  {% endif %}
+</div>
+
+<!-- Filter -->
+<div class="card border-0 shadow-sm mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label small fw-semibold mb-1">Nhóm</label>
+        <select name="group_id" class="form-select form-select-sm" onchange="this.form.submit()">
+          <option value="">Tất cả nhóm</option>
+          {% for g in groups %}
+          <option value="{{ g.id }}" {% if selected_group == g.id %}selected{% endif %}>{{ g.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small fw-semibold mb-1">Nghiên cứu viên</label>
+        <select name="user_id" class="form-select form-select-sm" onchange="this.form.submit()">
+          <option value="">Tất cả</option>
+          {% for m in members %}
+          <option value="{{ m.id }}" {% if selected_user == m.id %}selected{% endif %}>{{ m.full_name or m.username }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label small fw-semibold mb-1">Tìm kiếm</label>
+        <div class="input-group input-group-sm">
+          <input type="text" name="q" class="form-control" value="{{ search_q }}"
+                 placeholder="Tên NCV, nhóm, project, sổ tay, tiêu đề, nội dung...">
+          <button type="submit" class="btn btn-outline-secondary"><i class="bi bi-search"></i></button>
+          {% if search_q %}
+          <a href="?group_id={{ selected_group or '' }}&user_id={{ selected_user or '' }}" class="btn btn-outline-secondary" title="Xoá tìm kiếm">
+            <i class="bi bi-x-lg"></i>
+          </a>
+          {% endif %}
+        </div>
+      </div>
+      <div class="col-12 text-muted small">
+        Đang khoá sau <strong>{{ lock_days }} ngày</strong>. Đang hiển thị {{ entries|length }} bản ghi{% if search_q %} khớp tìm kiếm "{{ search_q }}"{% else %} gần nhất{% endif %}.
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+  <div class="card-body p-0">
+    {% if entries %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Nghiên cứu viên</th>
+            <th>Nhóm</th>
+            <th>Project</th>
+            <th>Sổ tay</th>
+            <th>Tiêu đề</th>
+            <th>Tạo lúc</th>
+            <th>Tệp đính kèm</th>
+            <th>Trạng thái</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in entries %}
+          {% set locked = is_locked(e) %}
+          <tr>
+            <td>{{ e.author.full_name or e.author.username }}</td>
+            <td>{{ e.group.name if e.group else '—' }}</td>
+            <td>
+              {% if e.project %}
+              <a href="/projects/{{ e.project.id }}" class="badge text-decoration-none" style="background:#ffedd5;color:#c2410c;">{{ e.project.full_path_name }}</a>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td>
+              {% if e.notebook %}
+              <a href="/notebooks/{{ e.notebook.id }}" class="badge text-decoration-none" style="background:#ffedd5;color:#c2410c;">{{ e.notebook.topic_name }}</a>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td>{{ e.title or ('Nhật ký #' ~ e.id) }}</td>
+            <td class="text-muted small">{{ e.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+            <td class="text-muted small">{{ e.files|length }}</td>
+            <td>
+              {% if locked %}
+                <span class="badge bg-secondary"><i class="bi bi-lock-fill me-1"></i>Đã khoá</span>
+              {% else %}
+                <span class="badge bg-success"><i class="bi bi-unlock-fill me-1"></i>Còn sửa được</span>
+              {% endif %}
+            </td>
+            <td><a href="/diary/{{ e.id }}" class="btn btn-sm btn-outline-primary">Xem</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-journal" style="font-size:3rem;opacity:.3;"></i>
+      <p class="mt-2">Chưa có nhật ký nào phù hợp bộ lọc.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Cài đặt nhật ký thí nghiệm{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center gap-3 mb-4">
+  <a href="/diary/overview" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i></a>
+  <div>
+    <h4 class="fw-bold mb-1"><i class="bi bi-shield-lock me-2 text-success"></i>Cài đặt nhật ký thí nghiệm</h4>
+    <p class="text-muted small mb-0">Cấu hình thời gian khoá nhật ký thí nghiệm sau khi nghiên cứu viên ghi.</p>
+  </div>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <form method="post" action="/admin/diary-settings">
+          <label class="form-label fw-semibold">Số ngày còn được chỉnh sửa sau khi tạo nhật ký</label>
+          <div class="input-group mb-2" style="max-width:260px;">
+            <input type="number" name="daily_log_lock_days" class="form-control"
+                   value="{{ cfg.daily_log_lock_days }}" min="0" step="1" required>
+            <span class="input-group-text">ngày</span>
+          </div>
+          <div class="alert alert-warning py-2 small mb-4">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            Sau khoảng thời gian này kể từ lúc tạo, nhật ký sẽ <strong>khoá vĩnh viễn</strong> —
+            <strong>kể cả admin cũng không thể sửa hoặc xoá</strong> nữa, nhằm đảm bảo tính liêm chính khoa học.
+            Đặt <strong>0</strong> nếu muốn khoá ngay sau khi tạo (không cho sửa lại).
+          </div>
+          <button type="submit" class="btn btn-success px-4">
+            <i class="bi bi-floppy me-1"></i>Lưu cài đặt
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

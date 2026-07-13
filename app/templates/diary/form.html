@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Sửa nhật ký' if entry else 'Ghi nhật ký mới' }}{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center gap-3 mb-4">
+  <a href="{% if entry %}/diary/{{ entry.id }}{% else %}/diary{% endif %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i></a>
+  <h4 class="mb-0 fw-bold">
+    <i class="bi bi-journal-plus text-success me-2"></i>
+    {{ 'Chỉnh sửa nhật ký' if entry else 'Ghi nhật ký thí nghiệm mới' }}
+  </h4>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-lg-9">
+
+    <div class="alert alert-info d-flex align-items-center gap-2 mb-3 py-2 small">
+      <i class="bi bi-shield-lock fs-5"></i>
+      <div>
+        Nhật ký sẽ tự động <strong>khoá vĩnh viễn</strong> sau <strong>{{ lock_days }} ngày</strong> kể từ lúc tạo
+        để đảm bảo tính liêm chính khoa học — sau khi khoá thì <strong>không ai</strong> sửa được nữa.
+        Mọi thay đổi trước khi khoá đều được <strong>ghi lại lịch sử</strong> (ai sửa, sửa lúc nào, sửa những gì).
+      </div>
+    </div>
+
+    {% if entry and entry.user_id != user.id %}
+    <div class="alert alert-warning d-flex align-items-center gap-2 mb-3 py-2 small">
+      <i class="bi bi-person-badge fs-5"></i>
+      <div>
+        Bạn đang sửa nhật ký của <strong>{{ entry.author.full_name or entry.author.username }}</strong> với vai trò quản lý.
+        Việc sửa sẽ được ghi vào lịch sử kèm tên bạn.
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+
+        <form method="post" action="/diary/save" enctype="multipart/form-data" id="entryForm">
+          {% if entry %}<input type="hidden" name="log_id" value="{{ entry.id }}">{% endif %}
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Tiêu đề</label>
+            <input type="text" name="title" class="form-control"
+                   value="{{ entry.title if entry else '' }}"
+                   placeholder="VD: Nuôi cấy tế bào gốc mẫu A — lần 2">
+          </div>
+
+          {% if preselect %}
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Gắn vào</label>
+            <input type="hidden" name="attach_to" value="{{ preselect.value }}">
+            <div class="form-control bg-light d-flex align-items-center gap-2">
+              <i class="bi bi-check-circle-fill text-success"></i>
+              <span>{{ preselect.label }}</span>
+            </div>
+            <div class="form-text">Tự động gắn vào nơi bạn vừa ghi nhật ký từ đó — không cần chọn lại.</div>
+          </div>
+          {% elif my_projects or my_notebooks %}
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Gắn vào <span class="text-muted fw-normal small">(không bắt buộc)</span></label>
+            <select name="attach_to" class="form-select">
+              <option value="">— Không gắn vào project/sổ tay nào —</option>
+              {% if my_projects %}
+              <optgroup label="Project (thành viên xem được nhau)">
+                {% for p in my_projects %}
+                <option value="project:{{ p.id }}" {% if entry and entry.project_id == p.id %}selected{% endif %}>
+                  {%- if p.parent %}{{ p.full_path_name }}{% else %}{{ p.name }}{% endif -%}
+                </option>
+                {% endfor %}
+              </optgroup>
+              {% endif %}
+              {% if my_notebooks %}
+              <optgroup label="Sổ tay cá nhân">
+                {% for nb in my_notebooks %}
+                <option value="notebook:{{ nb.id }}" {% if entry and entry.notebook_id == nb.id %}selected{% endif %}>{{ nb.topic_name }}</option>
+                {% endfor %}
+              </optgroup>
+              {% endif %}
+            </select>
+            <div class="form-text">Gắn vào project: thành viên khác xem được nhật ký này (chỉ xem, không sửa). Gắn vào sổ tay: chỉ mình bạn xem được.</div>
+          </div>
+          {% endif %}
+
+          <div class="mb-4">
+            <label class="form-label fw-semibold">Nội dung nhật ký <span class="text-danger">*</span></label>
+            <div class="alert alert-light border py-2 small mb-2">
+              <i class="bi bi-lightbulb me-1"></i>
+              Ghi lại thí nghiệm/công việc đã làm, kết quả quan sát được, số liệu đo đạc.
+              Hỗ trợ <strong>Markdown</strong> (# tiêu đề, **đậm**, - danh sách, | bảng |).
+            </div>
+            <textarea name="content" id="contentArea" class="form-control font-monospace"
+                      rows="16" required
+                      placeholder="## Công việc đã thực hiện
+...
+
+## Kết quả / quan sát
+...
+
+## Ghi chú">{{ entry.content if entry else '' }}</textarea>
+          </div>
+
+          <div class="alert alert-light border py-2 small mb-3">
+            <i class="bi bi-paperclip me-1"></i>
+            Nên đính kèm đầy đủ cả 2 loại minh chứng nếu có — dùng đúng ô tương ứng bên dưới.
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">
+              <i class="bi bi-hdd-network me-1"></i>File dữ liệu thô
+              <span class="text-muted fw-normal small">(ảnh/hình chụp trực tiếp từ máy, thiết bị đo chưa qua chỉnh sửa; file xuất thẳng từ máy đo)</span>
+            </label>
+            <input type="file" name="raw_files" id="rawFilesInput" class="form-control" multiple>
+            <div class="form-text">Chấp nhận hầu hết định dạng file (kể cả định dạng riêng của thiết bị đo). Tối đa 50MB/file.</div>
+            <div id="rawFilesPreview" class="d-flex flex-wrap gap-2 mt-2"></div>
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label fw-semibold">
+              <i class="bi bi-graph-up me-1"></i>File kết quả đã xử lý
+              <span class="text-muted fw-normal small">(biểu đồ, bảng tổng hợp, ảnh đã phân tích/chú thích)</span>
+            </label>
+            <input type="file" name="files" id="filesInput" class="form-control" multiple
+                   accept=".png,.jpg,.jpeg,.gif,.pdf,.xlsx,.xls,.csv,.docx,.doc,.txt">
+            <div class="form-text">Hỗ trợ: ảnh, PDF, Excel, Word, CSV, TXT. Tối đa 50MB/file. File nào xem trước được sẽ tự hiện bên dưới.</div>
+            <div id="newFilesPreview" class="d-flex flex-wrap gap-2 mt-2"></div>
+          </div>
+        </form>
+
+        {% if entry and entry.files %}
+        <div class="mb-4 mt-3">
+          <label class="form-label fw-semibold">File đã đính kèm</label>
+          <div class="d-flex flex-wrap gap-2">
+            {% for f in entry.files %}
+            {% set furl = '/uploads/diary/' ~ entry.user_id ~ '/' ~ entry.id ~ '/' ~ f.original_name %}
+            <div class="card border p-2 d-flex flex-row align-items-center gap-2" style="max-width:220px;">
+              {% if f.file_type == 'image' %}
+              <a href="{{ furl }}" target="_blank"><img src="{{ furl }}" style="width:36px;height:36px;object-fit:cover;border-radius:4px;"></a>
+              {% elif f.file_type == 'pdf' %}
+              <a href="{{ furl }}" target="_blank"><i class="bi bi-file-pdf text-danger fs-4"></i></a>
+              {% elif '.doc' in f.original_name.lower() %}
+              <i class="bi bi-file-word text-primary fs-4"></i>
+              {% elif '.xls' in f.original_name.lower() %}
+              <i class="bi bi-file-excel text-success fs-4"></i>
+              {% else %}
+              <a href="{{ furl }}" target="_blank"><i class="bi bi-file-earmark text-secondary fs-4"></i></a>
+              {% endif %}
+              <span class="small text-truncate" title="{{ f.original_name }}">{{ f.original_name }}</span>
+              {% if f.category == 'raw' %}<span class="badge bg-secondary" style="font-size:.6rem;">thô</span>
+              {% elif f.category == 'processed' %}<span class="badge bg-info text-dark" style="font-size:.6rem;">đã xử lý</span>{% endif %}
+              <form method="post" action="/diary/{{ entry.id }}/delete-file/{{ f.id }}" class="ms-auto">
+                <button type="submit" class="btn btn-link btn-sm p-0 text-danger"
+                        onclick="return confirm('Xóa file {{ f.original_name }}?')">
+                  <i class="bi bi-x-lg"></i>
+                </button>
+              </form>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
+        <div class="d-flex gap-2">
+          <button type="submit" form="entryForm" class="btn btn-success">
+            <i class="bi bi-floppy me-1"></i>{{ 'Lưu thay đổi' if entry else 'Lưu nhật ký' }}
+          </button>
+          {% if entry and entry.user_id == user.id %}
+          <button type="button" class="btn btn-outline-danger"
+                  onclick="if(confirm('Xoá vĩnh viễn nhật ký này?')){ document.getElementById('deleteForm').submit(); }">
+            <i class="bi bi-trash3 me-1"></i>Xoá
+          </button>
+          <form id="deleteForm" method="post" action="/diary/{{ entry.id }}/delete" class="d-none"></form>
+          {% endif %}
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function setupFileInput(inputId, previewId) {
+  const input = document.getElementById(inputId);
+  const preview = document.getElementById(previewId);
+  if (!input || !preview) return;
+
+  // Input file gốc của trình duyệt: chọn lần sau sẽ THAY THẾ lần trước, không cộng dồn.
+  // Nên ta tự quản lý danh sách file đã chọn ở đây, rồi đồng bộ ngược lại vào input
+  // qua DataTransfer trước khi submit — nhờ vậy chọn nhiều lần vẫn giữ được tất cả.
+  let selectedFiles = [];
+
+  function syncInput() {
+    const dt = new DataTransfer();
+    selectedFiles.forEach(f => dt.items.add(f));
+    input.files = dt.files;
+  }
+
+  function card(inner) {
+    const el = document.createElement('div');
+    el.className = 'card border p-2 position-relative';
+    el.style.width = '140px';
+    el.innerHTML = inner;
+    return el;
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function removeBtn(index) {
+    return `<button type="button" class="btn btn-sm btn-outline-danger position-absolute top-0 end-0 p-0
+             d-flex align-items-center justify-content-center remove-file-btn"
+             style="width:20px;height:20px;transform:translate(40%,-40%);border-radius:50%;"
+             data-index="${index}" title="Bỏ file này"><i class="bi bi-x" style="font-size:.8rem;"></i></button>`;
+  }
+
+  function render() {
+    preview.innerHTML = '';
+    selectedFiles.forEach((file, index) => {
+      const name = escapeHtml(file.name);
+      const sizeKb = (file.size / 1024).toFixed(1);
+      const nameLine = `<div class="small text-truncate mt-1" title="${name}">${name}</div><div class="text-muted" style="font-size:.65rem;">${sizeKb} KB</div>`;
+      let el;
+
+      if (file.type.startsWith('image/')) {
+        const url = URL.createObjectURL(file);
+        el = card(`${removeBtn(index)}<img src="${url}" style="width:100%;height:90px;object-fit:cover;border-radius:4px;">${nameLine}`);
+      } else if (file.type === 'application/pdf') {
+        const url = URL.createObjectURL(file);
+        el = card(`${removeBtn(index)}<iframe src="${url}" style="width:100%;height:90px;border:0;pointer-events:none;"></iframe>${nameLine}`);
+      } else if (file.name.toLowerCase().endsWith('.txt')) {
+        el = card(`${removeBtn(index)}<div class="small text-muted preview-text" style="height:90px;overflow:hidden;white-space:pre-wrap;font-size:.65rem;"></div>${nameLine}`);
+        const pre = el.querySelector('.preview-text');
+        const reader = new FileReader();
+        reader.onload = e => { pre.textContent = e.target.result.slice(0, 300); };
+        reader.readAsText(file);
+      } else {
+        let icon = 'bi-file-earmark';
+        if (/\.(docx?|rtf)$/i.test(file.name)) icon = 'bi-file-word text-primary';
+        else if (/\.(xlsx?|csv)$/i.test(file.name)) icon = 'bi-file-excel text-success';
+        el = card(`${removeBtn(index)}<div class="text-center py-3"><i class="bi ${icon}" style="font-size:1.8rem;"></i></div>${nameLine}`);
+      }
+      preview.appendChild(el);
+    });
+  }
+
+  input.addEventListener('change', () => {
+    // input.files lúc này chỉ chứa các file VỪA chọn ở lần này (trình duyệt luôn thay thế
+    // toàn bộ khi mở lại hộp thoại) — cộng dồn vào selectedFiles rồi ghi đè lại input.files
+    // bằng TOÀN BỘ danh sách qua DataTransfer để khi submit form gửi đủ tất cả.
+    Array.from(input.files).forEach(f => selectedFiles.push(f));
+    syncInput();
+    render();
+  });
+
+  preview.addEventListener('click', (e) => {
+    const btn = e.target.closest('.remove-file-btn');
+    if (!btn) return;
+    const idx = parseInt(btn.dataset.index, 10);
+    selectedFiles.splice(idx, 1);
+    syncInput();
+    render();
+  });
+}
+
+setupFileInput('rawFilesInput', 'rawFilesPreview');
+setupFileInput('filesInput', 'newFilesPreview');
+</script>
+{% endblock %}

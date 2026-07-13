@@ -1,0 +1,26 @@
+# Secrets — KHÔNG đẩy lên GitHub
+.env
+
+# Database
+*.db
+*.db-wal
+*.db-shm
+
+# Uploads của người dùng
+uploads/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

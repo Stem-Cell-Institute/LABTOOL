@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Sửa' if report else 'Nộp' }} báo cáo{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center gap-3 mb-4">
+  <a href="/results" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i></a>
+  <h4 class="mb-0 fw-bold">
+    <i class="bi bi-clipboard2-plus text-primary me-2"></i>
+    {{ 'Chỉnh sửa' if report else 'Nộp báo cáo kết quả' }}
+  </h4>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-lg-9">
+
+    {% if period_closed %}
+    <div class="alert alert-danger d-flex align-items-center gap-2 mb-3">
+      <i class="bi bi-lock-fill fs-5"></i>
+      <div>
+        <strong>Kỳ nộp báo cáo {{ months[sel_month] }}/{{ sel_year }} đã đóng.</strong>
+        Bạn không thể nộp báo cáo chính thức cho kỳ này nữa. Hãy liên hệ quản trị viên nếu cần.
+      </div>
+    </div>
+    {% elif period and period.deadline %}
+    <div class="alert alert-warning d-flex align-items-center gap-2 mb-3">
+      <i class="bi bi-clock fs-5"></i>
+      <div>
+        Hạn nộp báo cáo {{ months[sel_month] }}/{{ sel_year }}:
+        <strong>{{ period.deadline.strftime('%d/%m/%Y %H:%M') }}</strong>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+
+        {# ── FORM CHÍNH: nội dung + upload file mới ── #}
+        <form method="post" action="/results/save" enctype="multipart/form-data" id="reportForm">
+          {% if report %}<input type="hidden" name="report_id" value="{{ report.id }}">{% endif %}
+
+          {# Kỳ báo cáo #}
+          {% set lock_period = report and report.status != 'draft' %}
+          <div class="row g-3 mb-4">
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Tháng báo cáo <span class="text-danger">*</span></label>
+              {% if lock_period %}
+                <input type="hidden" name="report_month" value="{{ sel_month }}">
+                <select class="form-select" disabled>
+                  <option selected>{{ months[sel_month] }}</option>
+                </select>
+              {% else %}
+                <select name="report_month" class="form-select">
+                  {% for i in range(1, 13) %}
+                  <option value="{{ i }}" {% if i == sel_month %}selected{% endif %}>{{ months[i] }}</option>
+                  {% endfor %}
+                </select>
+              {% endif %}
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Năm <span class="text-danger">*</span></label>
+              {% if lock_period %}
+                <input type="hidden" name="report_year" value="{{ sel_year }}">
+                <select class="form-select" disabled>
+                  <option selected>{{ sel_year }}</option>
+                </select>
+              {% else %}
+                <select name="report_year" class="form-select">
+                  {% for y in year_range %}
+                  <option value="{{ y }}" {% if y == sel_year %}selected{% endif %}>{{ y }}</option>
+                  {% endfor %}
+                </select>
+              {% endif %}
+            </div>
+          </div>
+
+          {# Nội dung #}
+          <div class="mb-4">
+            <label class="form-label fw-semibold">
+              Kết quả nghiên cứu tháng này <span class="text-danger">*</span>
+            </label>
+            <div class="alert alert-info py-2 small mb-2">
+              <i class="bi bi-lightbulb me-1"></i>
+              Hãy mô tả <strong>cụ thể</strong>: thí nghiệm đã thực hiện, kết quả đo được, số liệu, hình ảnh,
+              vấn đề gặp phải và hướng giải quyết. Tránh viết chung chung.
+              Hỗ trợ <strong>Markdown</strong> (# tiêu đề, **đậm**, - danh sách, | bảng |).
+            </div>
+            <textarea name="content" id="contentArea" class="form-control font-monospace"
+                      rows="18" required
+                      placeholder="# Kết quả nghiên cứu tháng {{ sel_month }}/{{ sel_year }}
+
+## 1. Thí nghiệm đã thực hiện
+- Thí nghiệm A: ...
+- Thí nghiệm B: ...
+
+## 2. Kết quả đạt được
+| Chỉ tiêu | Kết quả | Mục tiêu |
+|---|---|---|
+| ... | ... | ... |
+
+## 3. Vấn đề gặp phải
+...
+
+## 4. Kế hoạch tháng tới
+...">{{ report.content if report else '' }}</textarea>
+          </div>
+
+          {# Upload file mới #}
+          <div class="mb-2">
+            <label class="form-label fw-semibold">Thêm tệp đính kèm</label>
+            <input type="file" name="files" class="form-control" multiple
+                   accept=".png,.jpg,.jpeg,.gif,.pdf,.xlsx,.xls,.csv,.docx,.doc,.txt">
+            <div class="form-text">Hỗ trợ: ảnh, PDF, Excel, Word, CSV. Tối đa 50MB/file.</div>
+          </div>
+        </form>{# ── KẾT THÚC form chính ── #}
+
+        {# ── FILE ĐÃ ĐÍNH KÈM — form riêng, NGOÀI form chính ── #}
+        {% if report and report.files %}
+        <div class="mb-4 mt-3">
+          <label class="form-label fw-semibold">File đã đính kèm</label>
+          <div class="d-flex flex-wrap gap-2">
+            {% for f in report.files %}
+            <div class="card border p-2 d-flex flex-row align-items-center gap-2">
+              {% if f.file_type == 'image' %}
+                <i class="bi bi-image text-success"></i>
+              {% elif f.file_type == 'pdf' %}
+                <i class="bi bi-file-pdf text-danger"></i>
+              {% else %}
+                <i class="bi bi-file-earmark text-secondary"></i>
+              {% endif %}
+              <span class="small">{{ f.original_name }}</span>
+              <form method="post" action="/results/{{ report.id }}/delete-file/{{ f.id }}">
+                <button type="submit" class="btn btn-link btn-sm p-0 text-danger"
+                        onclick="return confirm('Xóa file {{ f.original_name }}?')">
+                  <i class="bi bi-x-lg"></i>
+                </button>
+              </form>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
+        {# ── CẢNH BÁO NỘP LẠI ── #}
+        {% if report and report.status == 'submitted' %}
+        <div class="alert alert-warning py-2 small mb-3">
+          <i class="bi bi-exclamation-triangle me-1"></i>
+          Bạn đang <strong>nộp lại</strong> báo cáo đã nộp trước đó.
+          Hệ thống sẽ phân tích lại toàn bộ nội dung mới. Kết quả phân tích cũ sẽ bị xoá.
+        </div>
+        {% endif %}
+
+        {# ── NÚT SUBMIT — dùng form="reportForm" để gửi form chính ── #}
+        <div class="d-flex gap-2">
+          <button type="submit" form="reportForm" name="action" value="draft"
+                  class="btn btn-outline-secondary" {% if period_closed %}disabled{% endif %}>
+            <i class="bi bi-floppy me-1"></i>Lưu nháp
+          </button>
+          {% if not period_closed %}
+            {% if report and report.status == 'submitted' %}
+            <button type="submit" form="reportForm" name="action" value="submit"
+                    class="btn btn-warning"
+                    onclick="return confirm('Nộp lại báo cáo? Kết quả phân tích cũ sẽ bị xoá và hệ thống sẽ phân tích lại từ đầu.')">
+              <i class="bi bi-arrow-repeat me-1"></i>Nộp lại báo cáo
+            </button>
+            {% else %}
+            <button type="submit" form="reportForm" name="action" value="submit"
+                    class="btn btn-primary"
+                    onclick="return confirm('Nộp báo cáo chính thức? Sau khi nộp hệ thống sẽ phân tích.')">
+              <i class="bi bi-send me-1"></i>Nộp báo cáo chính thức
+            </button>
+            {% endif %}
+          {% else %}
+          <button type="button" class="btn btn-secondary" disabled>
+            <i class="bi bi-lock me-1"></i>Kỳ nộp đã đóng
+          </button>
+          {% endif %}
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,528 @@
+{% extends "base.html" %}
+{% block title %}Quản lý tài khoản{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="mb-0 fw-bold"><i class="bi bi-person-gear text-primary me-2"></i>Tài khoản người dùng</h4>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createUserModal">
+    <i class="bi bi-person-plus me-1"></i>Tạo tài khoản
+  </button>
+</div>
+
+{% if flash %}
+  {% if flash.startswith('error:') %}
+  <div class="alert alert-danger alert-dismissible fade show">
+    <i class="bi bi-exclamation-triangle me-2"></i>{{ flash[6:] }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% else %}
+  <div class="alert alert-success alert-dismissible fade show">
+    <i class="bi bi-check-circle me-2"></i>{{ flash }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endif %}
+{% endif %}
+
+{% if error %}
+<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>{{ error }}</div>
+{% endif %}
+
+{# ── TÀI KHOẢN CHỜ DUYỆT ── #}
+{% if pending %}
+<div class="card border-warning border-2 shadow-sm mb-4">
+  <div class="card-header bg-warning bg-opacity-10 border-warning border-bottom py-3 d-flex align-items-center gap-2">
+    <i class="bi bi-hourglass-split text-warning fs-5"></i>
+    <h6 class="fw-bold mb-0">Tài khoản chờ duyệt
+      <span class="badge bg-warning text-dark ms-1">{{ pending|length }}</span>
+    </h6>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 small">
+        <thead class="table-light">
+          <tr>
+            <th>Tên đăng nhập</th>
+            <th>Họ tên</th>
+            <th>Loại</th>
+            <th>Email</th>
+            <th>Đăng ký lúc</th>
+            <th>Duyệt & Gán nhóm</th>
+            <th>Từ chối</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in pending %}
+          <tr>
+            <td><strong>{{ u.username }}</strong></td>
+            <td>{{ u.full_name or '—' }}</td>
+            <td>
+              {% if u.member_type == 'student' %}
+              <span class="badge bg-light text-dark border">Sinh viên</span>
+              {% elif u.member_type == 'ncs' %}
+              <span class="badge bg-light text-dark border">NCS</span>
+              {% else %}
+              <span class="badge bg-light text-dark border">NCV</span>
+              {% endif %}
+            </td>
+            <td class="text-muted">{{ u.email or '—' }}</td>
+            <td class="text-muted">{{ u.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+            <td>
+              <form method="post" action="/admin/users/{{ u.id }}/approve" class="d-flex gap-2 align-items-center">
+                <select name="group_id" class="form-select form-select-sm" style="width:160px;">
+                  <option value="">— Chưa có nhóm —</option>
+                  {% for g in groups %}
+                  <option value="{{ g.id }}">{{ g.name }}</option>
+                  {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-sm btn-success text-nowrap">
+                  <i class="bi bi-check-lg me-1"></i>Duyệt
+                </button>
+              </form>
+            </td>
+            <td>
+              <form method="post" action="/admin/users/{{ u.id }}/reject"
+                    onsubmit="return confirm('Từ chối và xoá tài khoản {{ u.username }}?\nHành động này không thể hoàn tác.')">
+                <button type="submit" class="btn btn-sm btn-outline-danger">
+                  <i class="bi bi-x-lg me-1"></i>Từ chối
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="card border-0 shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Tên đăng nhập</th>
+            <th>Họ tên</th>
+            <th>Loại</th>
+            <th>Nhóm</th>
+            <th>Vai trò</th>
+            <th>Báo cáo</th>
+            <th>Trạng thái</th>
+            <th>Ngày tạo</th>
+            <th>Thao tác nhanh</th>
+            <th>Chi tiết</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in users %}
+          <tr {% if not u.is_active %}class="opacity-50"{% endif %}>
+            <td><strong>{{ u.username }}</strong></td>
+            <td>{{ u.full_name or '—' }}</td>
+            <td>
+              {% if u.member_type == 'student' %}
+              <span class="badge bg-light text-dark border"><i class="bi bi-mortarboard me-1"></i>Sinh viên</span>
+              {% elif u.member_type == 'ncs' %}
+              <span class="badge bg-light text-dark border"><i class="bi bi-easel me-1"></i>NCS</span>
+              {% else %}
+              <span class="badge bg-light text-dark border"><i class="bi bi-person-workspace me-1"></i>NCV</span>
+              {% endif %}
+              {% if u.member_type in ('student', 'ncs') and u.can_create_project %}
+              <span class="badge bg-success bg-opacity-15 text-success border border-success border-opacity-25"
+                    title="Được cấp quyền tự tạo project như NCV" data-bs-toggle="tooltip">
+                <i class="bi bi-unlock me-1"></i>Được tạo project
+              </span>
+              {% endif %}
+            </td>
+            <td>
+              {% if u.group %}<span class="badge bg-secondary">{{ u.group.name }}</span>
+              {% else %}<span class="text-muted small">—</span>{% endif %}
+            </td>
+            <td>
+              {% if u.role == 'admin' %}
+                <span class="badge bg-danger"><i class="bi bi-shield-fill me-1"></i>Admin</span>
+              {% elif u.can_view_all %}
+                <span class="badge bg-warning text-dark"><i class="bi bi-star-fill me-1"></i>Viện trưởng</span>
+              {% else %}
+                <span class="badge bg-info text-dark"><i class="bi bi-person me-1"></i>NCV</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if u.role == 'admin' %}
+                <span class="badge bg-danger bg-opacity-15 text-danger border border-danger border-opacity-25"
+                      title="Admin có toàn quyền — không cần cấp thêm">
+                  <i class="bi bi-shield-fill me-1"></i>Mặc định
+                </span>
+              {% elif u.can_view_all %}
+                <span class="badge bg-warning text-dark" title="Được cấp quyền xem báo cáo toàn cảnh">
+                  <i class="bi bi-eye-fill me-1"></i>Toàn cảnh
+                </span>
+              {% else %}
+                <span class="badge bg-light text-muted border" title="Chỉ thấy nhóm của mình">
+                  <i class="bi bi-people me-1"></i>Nhóm
+                </span>
+              {% endif %}
+            </td>
+            <td>
+              {% if u.is_active %}
+                <span class="badge bg-success">Hoạt động</span>
+              {% else %}
+                <span class="badge bg-secondary">Vô hiệu</span>
+              {% endif %}
+            </td>
+            <td class="text-muted small">{{ u.created_at.strftime('%d/%m/%Y') }}</td>
+
+            <!-- Quick actions -->
+            <td>
+              <div class="d-flex gap-1">
+                {% if u.id != user.id %}
+                  <!-- Toggle Admin -->
+                  <form method="post" action="/admin/users/{{ u.id }}/toggle-admin" class="d-inline">
+                    {% if u.role == 'admin' %}
+                    <button type="submit" class="btn btn-sm btn-outline-danger"
+                      title="Thu quyền Admin"
+                      onclick="return confirm('Thu quyền Admin của {{ u.username }}?')">
+                      <i class="bi bi-shield-minus"></i>
+                    </button>
+                    {% else %}
+                    <button type="submit" class="btn btn-sm btn-outline-success"
+                      title="Cấp quyền Admin"
+                      onclick="return confirm('Cấp quyền Admin cho {{ u.username }}?')">
+                      <i class="bi bi-shield-plus"></i>
+                    </button>
+                    {% endif %}
+                  </form>
+
+                  <!-- Toggle View All (chỉ cho Member) -->
+                  {% if u.role != 'admin' %}
+                  <form method="post" action="/admin/users/{{ u.id }}/toggle-view-all" class="d-inline">
+                    {% if u.can_view_all %}
+                    <button type="submit" class="btn btn-sm btn-warning"
+                      data-bs-toggle="tooltip"
+                      title="Đang có quyền xem toàn cảnh — Click để thu lại"
+                      onclick="return confirm('Thu quyền xem báo cáo toàn cảnh của {{ u.username }}?')">
+                      <i class="bi bi-eye-slash-fill"></i>
+                    </button>
+                    {% else %}
+                    <button type="submit" class="btn btn-sm btn-outline-warning"
+                      data-bs-toggle="tooltip"
+                      title="Cấp quyền xem báo cáo toàn cảnh (dành cho Viện trưởng, BGĐ...)"
+                      onclick="return confirm('Cấp quyền xem báo cáo toàn cảnh cho {{ u.username }}?')">
+                      <i class="bi bi-eye"></i>
+                    </button>
+                    {% endif %}
+                  </form>
+                  {% else %}
+                  <span class="text-muted small" data-bs-toggle="tooltip"
+                        title="Admin đã có toàn quyền — không cần cấp thêm">
+                    <i class="bi bi-lock-fill"></i>
+                  </span>
+                  {% endif %}
+
+                  <!-- Toggle Create Project (chỉ hiện cho Sinh viên/NCS — NCV mặc định đã có) -->
+                  {% if u.role != 'admin' and u.member_type in ('student', 'ncs') %}
+                  <form method="post" action="/admin/users/{{ u.id }}/toggle-create-project" class="d-inline">
+                    {% if u.can_create_project %}
+                    <button type="submit" class="btn btn-sm btn-success"
+                      data-bs-toggle="tooltip"
+                      title="Đang được cấp quyền tự tạo project như NCV — Click để thu lại"
+                      onclick="return confirm('Thu quyền tự tạo project của {{ u.username }}?')">
+                      <i class="bi bi-unlock-fill"></i>
+                    </button>
+                    {% else %}
+                    <button type="submit" class="btn btn-sm btn-outline-success"
+                      data-bs-toggle="tooltip"
+                      title="Cấp quyền tự tạo project như NCV (VD: NCS được Viện cho hoạt động tự do)"
+                      onclick="return confirm('Cấp quyền tự tạo project cho {{ u.username }}?')">
+                      <i class="bi bi-unlock"></i>
+                    </button>
+                    {% endif %}
+                  </form>
+                  {% endif %}
+
+                  <!-- Toggle Active -->
+                  <form method="post" action="/admin/users/{{ u.id }}/toggle-active" class="d-inline">
+                    {% if u.is_active %}
+                    <button type="submit" class="btn btn-sm btn-outline-secondary"
+                      title="Vô hiệu hoá tài khoản"
+                      onclick="return confirm('Vô hiệu hoá tài khoản {{ u.username }}?')">
+                      <i class="bi bi-person-slash"></i>
+                    </button>
+                    {% else %}
+                    <button type="submit" class="btn btn-sm btn-outline-primary"
+                      title="Kích hoạt lại tài khoản"
+                      onclick="return confirm('Kích hoạt lại tài khoản {{ u.username }}?')">
+                      <i class="bi bi-person-check"></i>
+                    </button>
+                    {% endif %}
+                  </form>
+                {% else %}
+                  <span class="text-muted small">(tài khoản của bạn)</span>
+                {% endif %}
+              </div>
+            </td>
+
+            <!-- Full edit -->
+            <td>
+              <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal"
+                data-bs-target="#editUser{{ u.id }}" title="Chỉnh sửa chi tiết">
+                <i class="bi bi-pencil"></i>
+              </button>
+            </td>
+          </tr>
+
+          <!-- Edit user modal -->
+          <div class="modal fade" id="editUser{{ u.id }}" tabindex="-1">
+            <div class="modal-dialog">
+              <form method="post" action="/admin/users/{{ u.id }}/update">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <h6 class="modal-title fw-bold">Chỉnh sửa: {{ u.username }}</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                  </div>
+                  <div class="modal-body">
+                    <div class="mb-3">
+                      <label class="form-label fw-semibold">Họ tên</label>
+                      <input type="text" name="full_name" class="form-control" value="{{ u.full_name }}">
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label fw-semibold">Email</label>
+                      <input type="email" name="email" class="form-control" value="{{ u.email }}">
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label fw-semibold">Vai trò</label>
+                      <select name="role" class="form-select" {% if u.id == user.id %}disabled{% endif %}>
+                        <option value="member" {% if u.role == 'member' and not u.can_view_all %}selected{% endif %}>NCV (Member)</option>
+                        <option value="vien_truong" {% if u.role == 'member' and u.can_view_all %}selected{% endif %}>Viện trưởng</option>
+                        <option value="admin" {% if u.role == 'admin' %}selected{% endif %}>Admin</option>
+                      </select>
+                      {% if u.id == user.id %}
+                      <input type="hidden" name="role" value="{{ u.role }}">
+                      <div class="form-text text-warning"><i class="bi bi-info-circle me-1"></i>Không thể tự đổi vai trò của mình</div>
+                      {% endif %}
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label fw-semibold">Loại thành viên</label>
+                      <select name="member_type" class="form-select">
+                        <option value="researcher" {% if u.member_type not in ('student', 'ncs') %}selected{% endif %}>Nghiên cứu viên</option>
+                        <option value="student" {% if u.member_type == 'student' %}selected{% endif %}>Sinh viên / học viên</option>
+                        <option value="ncs" {% if u.member_type == 'ncs' %}selected{% endif %}>Nghiên cứu sinh (NCS)</option>
+                      </select>
+                      <div class="form-text">Sinh viên/học viên và NCS mặc định không tự tạo được Project.</div>
+                    </div>
+                    <div class="mb-3 form-check">
+                      <input type="checkbox" class="form-check-input" id="ccp{{ u.id }}" name="can_create_project"
+                             {% if u.can_create_project %}checked{% endif %}>
+                      <label class="form-check-label" for="ccp{{ u.id }}">
+                        Cho phép tự tạo project <span class="text-muted small">(luôn bật cho NCV; bật riêng cho Sinh viên/NCS nếu được Viện cho phép hoạt động tự do)</span>
+                      </label>
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label fw-semibold">Nhóm <span class="text-muted fw-normal small">(tuỳ chọn)</span></label>
+                      {% if groups %}
+                      <select name="group_id" class="form-select">
+                        <option value="">— Không gán nhóm —</option>
+                        {% for g in groups %}
+                        <option value="{{ g.id }}" {% if u.group_id == g.id %}selected{% endif %}>{{ g.name }}</option>
+                        {% endfor %}
+                      </select>
+                      {% else %}
+                      <select class="form-select" disabled>
+                        <option>— Chưa có nhóm nào —</option>
+                      </select>
+                      <div class="form-text">
+                        <a href="/admin/groups" target="_blank">Tạo nhóm</a> rồi quay lại gán.
+                      </div>
+                      {% endif %}
+                    </div>
+                    <div class="mb-0">
+                      <label class="form-label fw-semibold">Đặt lại mật khẩu</label>
+                      <input type="password" name="new_password" class="form-control" placeholder="Để trống nếu không đổi">
+                    </div>
+                  </div>
+                  <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+                    <button type="submit" class="btn btn-primary">Lưu</button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Legend -->
+<div class="mt-3 d-flex gap-3 flex-wrap text-muted small">
+  <span><i class="bi bi-shield-plus text-success me-1"></i>Cấp quyền Admin</span>
+  <span><i class="bi bi-shield-minus text-danger me-1"></i>Thu quyền Admin</span>
+  <span><i class="bi bi-eye text-warning me-1"></i>Cấp xem báo cáo toàn cảnh</span>
+  <span><i class="bi bi-eye-slash me-1"></i>Thu quyền xem toàn cảnh</span>
+  <span><i class="bi bi-person-slash me-1"></i>Vô hiệu hoá tài khoản</span>
+  <span><i class="bi bi-person-check text-primary me-1"></i>Kích hoạt lại</span>
+  <span><i class="bi bi-pencil me-1"></i>Chỉnh sửa chi tiết</span>
+</div>
+
+{# ── BẢNG PHÂN QUYỀN TOÀN HỆ THỐNG ── #}
+<div class="card border-0 shadow-sm mt-4" style="background:#1a1f2e;">
+  <div class="card-header border-0 py-3" style="background:#1a1f2e;">
+    <h6 class="fw-bold text-white mb-0">
+      <i class="bi bi-shield-lock me-2 text-info"></i>Tóm tắt phân quyền toàn hệ thống
+    </h6>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-borderless align-middle mb-0 small" style="background:transparent;">
+        <thead>
+          <tr style="border-bottom:1px solid rgba(255,255,255,.1);">
+            <th class="text-white ps-4 py-3" style="width:40%;">Trang / Chức năng</th>
+            <th class="text-center py-3" style="color:#adb5bd;">Member thường</th>
+            <th class="text-center py-3" style="color:#ffc107;">Viện trưởng <small class="fw-normal opacity-75">(can_view_all)</small></th>
+            <th class="text-center py-3" style="color:#dc3545;">Admin</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set rows = [
+            ("VidNote (video, nhật ký nhóm mình)",        True,  True,  True),
+            ("Nộp / xem báo cáo của mình",                True,  True,  True),
+            ("Xem báo cáo toàn bộ NCV",                   False, True,  True),
+            ("Duyệt kết quả / nhận xét",                  False, True,  True),
+            ("/admin/users — quản lý tài khoản",          False, False, True),
+            ("/admin/groups — quản lý nhóm",              False, False, True),
+            ("/admin/report-periods — kỳ nộp",            False, False, True),
+            ("/admin/ai-settings — cài đặt AI",           False, False, True),
+            ("/admin/stats, activity log",                 False, False, True),
+          ] %}
+          {% for label, m, vt, ad in rows %}
+          <tr style="border-bottom:1px solid rgba(255,255,255,.05);">
+            <td class="ps-4 py-2" style="color:#e9ecef;">
+              {% if label.startswith('/admin') %}
+                <code style="color:#6ea8fe;font-size:.8em;">{{ label }}</code>
+              {% else %}
+                {{ label }}
+              {% endif %}
+            </td>
+            <td class="text-center py-2">
+              {% if m %}<i class="bi bi-check-circle-fill text-success fs-5"></i>
+              {% else %}<i class="bi bi-x-circle-fill text-danger fs-5"></i>{% endif %}
+            </td>
+            <td class="text-center py-2">
+              {% if vt %}<i class="bi bi-check-circle-fill text-success fs-5"></i>
+              {% else %}<i class="bi bi-x-circle-fill text-danger fs-5"></i>{% endif %}
+            </td>
+            <td class="text-center py-2">
+              {% if ad %}<i class="bi bi-check-circle-fill text-success fs-5"></i>
+              {% else %}<i class="bi bi-x-circle-fill text-danger fs-5"></i>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card-footer border-0 py-2 px-4" style="background:rgba(255,255,255,.04);">
+    <div class="d-flex flex-wrap gap-3 small" style="color:#adb5bd;">
+      <span><i class="bi bi-shield-plus text-success me-1"></i><a href="#" class="text-decoration-none" style="color:inherit;">Cấp Admin</a> — nút <i class="bi bi-shield-plus"></i> trong bảng</span>
+      <span><i class="bi bi-eye text-warning me-1"></i><a href="#" class="text-decoration-none" style="color:inherit;">Cấp Viện trưởng</a> — nút <i class="bi bi-eye"></i> trong bảng</span>
+      <span><i class="bi bi-pencil text-info me-1"></i>Đổi vai trò chi tiết — nút <i class="bi bi-pencil"></i> → chọn Vai trò</span>
+    </div>
+  </div>
+</div>
+
+<!-- Create user modal -->
+<div class="modal fade" id="createUserModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="post" action="/admin/users/create">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h6 class="modal-title fw-bold"><i class="bi bi-person-plus me-2 text-primary"></i>Tạo tài khoản mới</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Tên đăng nhập <span class="text-danger">*</span></label>
+              <input type="text" name="username" class="form-control" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Mật khẩu <span class="text-danger">*</span></label>
+              <input type="password" name="password" class="form-control" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Họ tên</label>
+              <input type="text" name="full_name" class="form-control">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Email</label>
+              <input type="email" name="email" class="form-control">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Vai trò</label>
+              <select name="role" class="form-select">
+                <option value="member" selected>NCV (Member)</option>
+                <option value="vien_truong">Viện trưởng</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Loại thành viên</label>
+              <select name="member_type" id="newMemberType" class="form-select">
+                <option value="researcher" selected>Nghiên cứu viên</option>
+                <option value="student">Sinh viên / học viên</option>
+                <option value="ncs">Nghiên cứu sinh (NCS)</option>
+              </select>
+            </div>
+            <div class="col-12 form-check">
+              <input type="checkbox" class="form-check-input" id="newCanCreateProject" name="can_create_project" checked>
+              <label class="form-check-label" for="newCanCreateProject">
+                Cho phép tự tạo project <span class="text-muted small">(luôn bật cho NCV; bật riêng cho Sinh viên/NCS nếu được Viện cho phép hoạt động tự do)</span>
+              </label>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Nhóm <span class="text-muted fw-normal small">(tuỳ chọn)</span></label>
+              {% if groups %}
+              <select name="group_id" class="form-select">
+                <option value="">— Không gán nhóm —</option>
+                {% for g in groups %}
+                <option value="{{ g.id }}">{{ g.name }}</option>
+                {% endfor %}
+              </select>
+              {% else %}
+              <select class="form-select" disabled>
+                <option>— Chưa có nhóm nào —</option>
+              </select>
+              <div class="form-text">
+                <i class="bi bi-info-circle me-1"></i>
+                <a href="/admin/groups" target="_blank">Tạo nhóm trước</a> rồi quay lại gán sau.
+              </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-person-plus me-1"></i>Tạo tài khoản</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Goi y bat/tat "Cho phep tu tao project" theo loai thanh vien khi tao tai khoan moi
+// (chi la goi y mac dinh — admin van co the tu doi truoc khi luu).
+(function () {
+  const typeSelect = document.getElementById('newMemberType');
+  const checkbox = document.getElementById('newCanCreateProject');
+  if (!typeSelect || !checkbox) return;
+  typeSelect.addEventListener('change', function () {
+    checkbox.checked = (this.value === 'researcher');
+  });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Project của tôi{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="fw-bold mb-0"><i class="bi bi-kanban-fill me-2" style="color:#c2410c;"></i>Project của tôi</h4>
+  {% if can_create_project %}
+  <a href="/projects/new" class="btn" style="background:#c2410c;color:#fff;"><i class="bi bi-plus-lg me-1"></i>Tạo project mới</a>
+  {% endif %}
+</div>
+
+{% if not can_create_project %}
+<div class="alert alert-light border small mb-3">
+  <i class="bi bi-info-circle me-1"></i>
+  Bạn chưa được cấp quyền tự tạo project — hãy nhờ nghiên cứu viên hướng dẫn thêm bạn vào project/đề tài nhánh, hoặc liên hệ admin nếu cần được cấp quyền tự tạo.
+</div>
+{% endif %}
+
+{% if not projects %}
+<div class="card border-0 shadow-sm">
+  <div class="card-body text-center py-5 text-muted">
+    <i class="bi bi-kanban" style="font-size:3rem;opacity:.3;"></i>
+    {% if not can_create_project %}
+    <p class="mt-2">Bạn chưa tham gia project nào.</p>
+    {% else %}
+    <p class="mt-2">Bạn chưa tham gia project nào. <a href="/projects/new">Tạo project đầu tiên</a></p>
+    {% endif %}
+  </div>
+</div>
+{% else %}
+<div class="row g-3">
+  {% for p in projects %}
+  <div class="col-md-6 col-lg-4">
+    <div class="card border-0 shadow-sm h-100" style="border-left:4px solid #c2410c !important;">
+      <div class="card-body d-flex flex-column">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <h6 class="fw-bold mb-0">{{ p.name }}</h6>
+          {% if p.owner_id == user.id %}
+          <span class="badge" style="background:#ffedd5;color:#c2410c;">Quản lý Project</span>
+          {% endif %}
+        </div>
+        {% if p.parent %}
+        <div class="text-muted small mb-1">
+          <i class="bi bi-diagram-3 me-1"></i>Thuộc: {{ p.parent.full_path_name }}
+        </div>
+        {% endif %}
+        {% if p.description %}
+        <p class="small text-muted flex-grow-1">{{ p.description[:100] }}{% if p.description|length > 100 %}...{% endif %}</p>
+        {% endif %}
+        <div class="text-muted small mb-2">
+          <i class="bi bi-people me-1"></i>{{ p.members|length }} thành viên
+        </div>
+        <a href="/projects/{{ p.id }}" class="btn btn-sm btn-outline-secondary mt-auto">Xem project</a>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

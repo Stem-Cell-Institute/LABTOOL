@@ -1,0 +1,16 @@
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+sqlalchemy==2.0.36
+passlib[bcrypt]==1.7.4
+itsdangerous==2.2.0
+jinja2==3.1.4
+python-multipart==0.0.17
+markdown==3.7
+weasyprint==62.3
+python-dotenv==1.0.1
+google-genai==0.8.0
+python-docx==1.2.0
+openpyxl==3.1.5
+xlrd==2.0.2
+pillow==12.3.0
+imagehash==4.3.2

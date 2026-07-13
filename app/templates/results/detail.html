@@ -1,0 +1,316 @@
+{% extends "base.html" %}
+{% block title %}Báo cáo {{ months[report.report_month] }}/{{ report.report_year }}{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center gap-3 mb-4">
+  <a href="{% if can_manage %}/results/overview{% else %}/results{% endif %}"
+     class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i></a>
+  <h4 class="mb-0 fw-bold">
+    <i class="bi bi-clipboard2-data text-primary me-2"></i>
+    Báo cáo {{ months[report.report_month] }}/{{ report.report_year }}
+    — {{ report.author.full_name or report.author.username }}
+  </h4>
+  {% if report.status in ('draft', 'submitted') and not can_manage %}
+  <a href="/results/{{ report.id }}/edit" class="btn btn-outline-warning btn-sm ms-auto">
+    <i class="bi bi-pencil me-1"></i>
+    {{ 'Chỉnh sửa / Nộp lại' if report.status == 'submitted' else 'Chỉnh sửa' }}
+  </a>
+  {% endif %}
+</div>
+
+<div class="row g-4">
+  <!-- Nội dung báo cáo + AI -->
+  <div class="col-lg-8">
+
+    <!-- Thông tin chung -->
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body py-2">
+        <div class="d-flex flex-wrap gap-3 small">
+          <span><i class="bi bi-people me-1 text-muted"></i>{{ report.group.name }}</span>
+          <span><i class="bi bi-calendar3 me-1 text-muted"></i>{{ months[report.report_month] }}/{{ report.report_year }}</span>
+          {% if report.submitted_at %}
+          <span><i class="bi bi-send me-1 text-muted"></i>Nộp: {{ report.submitted_at.strftime('%d/%m/%Y %H:%M') }}</span>
+          {% endif %}
+          <span>
+            {% if report.status == 'draft' %}
+              <span class="badge bg-secondary">Bản nháp</span>
+            {% elif report.status == 'submitted' %}
+              <span class="badge bg-info text-dark">Đã nộp — chờ duyệt</span>
+            {% else %}
+              <span class="badge bg-success">Đã duyệt</span>
+            {% endif %}
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Nội dung NCV viết -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white border-0 pt-3 pb-0">
+        <h6 class="fw-bold mb-0"><i class="bi bi-person-lines-fill me-2 text-primary"></i>Nội dung báo cáo</h6>
+      </div>
+      <div class="card-body log-content">
+        {{ content_html|safe if content_html else '<p class="text-muted">Chưa có nội dung.</p>' }}
+      </div>
+    </div>
+
+    <!-- File đính kèm -->
+    {% if report.files %}
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white border-0 pt-3 pb-0">
+        <h6 class="fw-bold mb-0"><i class="bi bi-paperclip me-2 text-primary"></i>Tệp đính kèm ({{ report.files|length }})</h6>
+      </div>
+      <div class="card-body">
+        <div class="row g-3">
+          {% for f in report.files %}
+          <div class="col-md-6">
+            {% if f.file_type == 'image' %}
+            <div class="text-center border rounded-3 p-2">
+              <img src="/uploads/results/{{ report.user_id }}/{{ report.id }}/{{ f.original_name }}"
+                   class="img-fluid rounded" style="max-height:200px;" alt="{{ f.original_name }}">
+              <div class="small text-muted mt-1">{{ f.original_name }}</div>
+            </div>
+            {% else %}
+            <a href="/uploads/results/{{ report.user_id }}/{{ report.id }}/{{ f.original_name }}"
+               class="card border text-decoration-none d-flex flex-row align-items-center gap-3 p-3" target="_blank">
+              <i class="bi bi-file-pdf fs-3 text-danger"></i>
+              <div>
+                <div class="fw-semibold small">{{ f.original_name }}</div>
+                <div class="text-muted" style="font-size:.75rem;">{{ "%.1f"|format(f.file_size/1024) }} KB</div>
+              </div>
+            </a>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Đánh giá hệ thống -->
+    <div class="card border-0 shadow-sm" id="ai-section">
+      <div class="card-header bg-white border-0 pt-3 pb-0 d-flex justify-content-between align-items-center">
+        <div class="d-flex align-items-center gap-2">
+          <h6 class="fw-bold mb-0"><i class="bi bi-clipboard2-check text-primary me-2"></i>Hệ thống đánh giá và phân tích báo cáo của NCV</h6>
+          {% if user.role == 'admin' %}
+          <form method="post" action="/results/{{ report.id }}/reanalyze"
+                onsubmit="return confirm('Phân tích lại sẽ xoá kết quả hiện tại và chạy lại bằng tiêu chí mới. Tiếp tục?')">
+            <button type="submit" class="btn btn-xs btn-outline-secondary py-0 px-2"
+                    style="font-size:.7rem;" title="Phân tích lại theo tiêu chí mới">
+              <i class="bi bi-arrow-clockwise me-1"></i>Phân tích lại
+            </button>
+          </form>
+          {% endif %}
+        </div>
+        {% if report.ai_status == 'done' and ai_scoring %}
+        {# Bảng điểm theo Quy định Viện (format v2) #}
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+          {% if ai_scoring.missing_minimums %}
+            <span class="badge bg-dark px-2 py-1">⚠ Không đạt yêu cầu tối thiểu</span>
+          {% else %}
+            <span class="badge bg-light text-dark border" title="Tiêu chí A — Khối lượng thí nghiệm (1-5)">
+              A: <strong>{{ ai_scoring.A or '?' }}/5</strong>
+            </span>
+            <span class="badge bg-light text-dark border" title="Tiêu chí B — Chất lượng ghi nhận (1-5)">
+              B: <strong>{{ ai_scoring.B or '?' }}/5</strong>
+            </span>
+            {% if ai_scoring.deductions %}
+            <span class="badge bg-warning text-dark border" title="Điểm trừ đầu việc phi thí nghiệm">
+              Trừ: <strong>−{{ ai_scoring.deductions }}đ</strong>
+            </span>
+            {% endif %}
+            {% if ai_scoring.total is not none %}
+            <span class="badge bg-{{ 'success' if ai_scoring.total >= 90 else ('primary' if ai_scoring.total >= 70 else ('warning text-dark' if ai_scoring.total >= 50 else 'dark')) }} px-2">
+              Tổng: <strong>{{ ai_scoring.total }}/100</strong>
+            </span>
+            {% endif %}
+          {% endif %}
+        </div>
+        {% elif report.ai_status == 'done' and ai_scores %}
+        {# Hiển thị cũ cho báo cáo chưa được phân tích lại #}
+        <div class="d-flex flex-wrap gap-1">
+          {% for s in ai_scores %}{% if s.score %}
+          <span class="badge bg-light text-dark border">
+            {{ s.label|truncate(14, true, '…') }}: <strong>{{ s.score }}/5</strong>
+          </span>
+          {% endif %}{% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      <div class="card-body" id="ai-body">
+        {% if report.ai_status == 'done' %}
+          <div class="log-content">{{ ai_html|safe }}</div>
+        {% elif report.ai_status == 'running' or report.ai_status == 'pending' %}
+          <div class="text-center py-4" id="ai-waiting">
+            <div class="spinner-border text-primary mb-3"></div>
+            <p class="text-muted">Hệ thống đang phân tích báo cáo... Thường mất 30-60 giây.</p>
+          </div>
+        {% elif report.ai_status == 'failed' %}
+          <div class="alert alert-danger">
+            <i class="bi bi-exclamation-triangle me-2"></i>{{ report.ai_analysis }}
+          </div>
+        {% else %}
+          <p class="text-muted text-center py-3">Báo cáo chưa được nộp — hệ thống sẽ phân tích sau khi bạn nộp chính thức.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Sidebar: Quyết định quản lý -->
+  <div class="col-lg-4">
+
+    <!-- Kết quả đánh giá -->
+    {% if report.ai_verdict %}
+    {% set av = verdict_label.get(report.ai_verdict, ('', 'secondary')) %}
+    <div class="card border-0 shadow-sm mb-3 border-{{ av[1] }}" style="border-left:4px solid !important;">
+      <div class="card-body py-2">
+        <div class="small text-muted mb-1">Đề xuất đánh giá</div>
+        <span class="badge bg-{{ av[1] }} fs-6 px-3 py-2">{{ av[0] }}</span>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Quyết định quản lý -->
+    {% if can_manage %}
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-white border-0 pt-3 pb-0">
+        <h6 class="fw-bold mb-0"><i class="bi bi-person-check text-primary me-2"></i>Quyết định Ban quản lý</h6>
+      </div>
+      <div class="card-body">
+        {% if report.status == 'reviewed' %}
+        {% set md = verdict_label.get(report.manager_decision, ('—', 'secondary')) %}
+        <div class="mb-2">
+          <span class="badge bg-{{ md[1] }} fs-6 px-3 py-2">{{ md[0] }}</span>
+        </div>
+        {% if report.manager_note %}
+        <div class="alert alert-light py-2 small">
+          <i class="bi bi-chat-quote me-1"></i>{{ report.manager_note }}
+        </div>
+        {% endif %}
+        <div class="text-muted small">
+          Duyệt bởi: {{ report.reviewer.full_name or report.reviewer.username if report.reviewer else '—' }}
+          <br>{{ report.reviewed_at.strftime('%d/%m/%Y %H:%M') if report.reviewed_at else '' }}
+        </div>
+        <hr>
+        <p class="small text-muted mb-2">Cập nhật quyết định:</p>
+        {% endif %}
+
+        <form method="post" action="/results/{{ report.id }}/review" id="reviewForm">
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Kết quả đánh giá</label>
+            <div class="d-grid gap-2">
+              {% for val, (label, color) in verdict_label.items() %}
+              <div class="form-check">
+                <input class="form-check-input decision-radio" type="radio" name="manager_decision"
+                       value="{{ val }}" id="dec_{{ val }}"
+                       {% if report.manager_decision == val %}checked{% endif %}
+                       required>
+                <label class="form-check-label" for="dec_{{ val }}">
+                  <span class="badge bg-{{ color }}">{{ label }}</span>
+                </label>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          <div id="correctionHint" class="alert alert-warning py-2 small d-none">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            Đánh giá khác với đề xuất của hệ thống — vui lòng ghi rõ lý do bên dưới (giúp huấn luyện AI chính xác hơn cho các lần chấm sau).
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Nhận xét của BQL</label>
+            <textarea name="manager_note" id="managerNote" class="form-control form-control-sm" rows="4"
+                      placeholder="Ghi chú, chỉ đạo, lý do quyết định...">{{ report.manager_note }}</textarea>
+          </div>
+          <button type="submit" class="btn btn-primary w-100"
+                  {% if report.ai_status not in ('done', 'failed') %}disabled title="Đợi hệ thống phân tích xong"{% endif %}>
+            <i class="bi bi-check2-circle me-1"></i>Xác nhận quyết định
+          </button>
+        </form>
+      </div>
+    </div>
+    {% else %}
+    <!-- Researcher sees manager decision -->
+    {% if report.status == 'reviewed' %}
+    {% set md = verdict_label.get(report.manager_decision, ('—', 'secondary')) %}
+    <div class="card border-0 shadow-sm mb-3" style="border-left:4px solid var(--bs-{{ md[1] }}) !important;">
+      <div class="card-header bg-white border-0 pt-3 pb-0">
+        <h6 class="fw-bold mb-0"><i class="bi bi-clipboard2-check me-2"></i>Kết quả đánh giá</h6>
+      </div>
+      <div class="card-body">
+        <span class="badge bg-{{ md[1] }} fs-6 px-3 py-2 mb-2 d-block">{{ md[0] }}</span>
+        {% if report.manager_note %}
+        <div class="alert alert-light py-2 small">
+          <i class="bi bi-chat-quote me-1"></i>{{ report.manager_note }}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% elif report.status == 'submitted' %}
+    <div class="alert alert-info">
+      <i class="bi bi-clock me-2"></i>Báo cáo đã nộp, đang chờ ban quản lý duyệt.
+      <div class="mt-2">
+        <a href="/results/{{ report.id }}/edit" class="btn btn-sm btn-outline-primary">
+          <i class="bi bi-arrow-repeat me-1"></i>Cập nhật / Nộp lại
+        </a>
+      </div>
+    </div>
+    {% endif %}
+    {% endif %}
+
+    <!-- Điều hướng tháng -->
+    <div class="card border-0 shadow-sm">
+      <div class="card-body py-2">
+        <div class="d-flex justify-content-between">
+          {% set pm = report.report_month - 1 %}{% set py = report.report_year %}
+          {% if pm == 0 %}{% set pm = 12 %}{% set py = py - 1 %}{% endif %}
+          <a href="/results/overview" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-table me-1"></i>Tổng quan
+          </a>
+          <a href="/results/monthly?year={{ report.report_year }}&month={{ report.report_month }}"
+             class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-people me-1"></i>Tháng này
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if report.ai_status in ('pending', 'running') %}
+<script>
+const poll = setInterval(async () => {
+  const r = await fetch('/results/{{ report.id }}/ai-status');
+  const d = await r.json();
+  if (d.status === 'done' || d.status === 'failed') {
+    clearInterval(poll);
+    window.location.reload();
+  }
+}, 5000);
+</script>
+{% endif %}
+{% if can_manage %}
+<script>
+(() => {
+  const aiVerdict = {{ (report.ai_verdict or '')|tojson }};
+  const radios = document.querySelectorAll('.decision-radio');
+  const hint = document.getElementById('correctionHint');
+  const note = document.getElementById('managerNote');
+
+  function updateHint() {
+    const checked = document.querySelector('.decision-radio:checked');
+    const isCorrection = aiVerdict && checked && checked.value !== aiVerdict;
+    hint.classList.toggle('d-none', !isCorrection);
+    if (isCorrection) {
+      note.setAttribute('required', 'required');
+    } else {
+      note.removeAttribute('required');
+    }
+  }
+
+  radios.forEach(r => r.addEventListener('change', updateHint));
+  updateHint();
+})();
+</script>
+{% endif %}
+{% endblock %}

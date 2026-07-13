@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Upload video{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-7">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-0 pt-3">
+        <h5 class="fw-bold mb-0"><i class="bi bi-upload text-primary me-2"></i>Upload video thí nghiệm</h5>
+      </div>
+      <div class="card-body">
+        {% if error %}
+        <div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>{{ error }}</div>
+        {% endif %}
+        <form method="post" action="/videos/upload" enctype="multipart/form-data" id="uploadForm">
+          {% if user.role == 'admin' and groups %}
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Nhóm nghiên cứu</label>
+            <select name="group_id" class="form-select" required>
+              <option value="">-- Chọn nhóm --</option>
+              {% for g in groups %}
+              <option value="{{ g.id }}">{{ g.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          {% endif %}
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Kỳ báo cáo <span class="text-danger">*</span></label>
+            <div class="row g-2">
+              <div class="col-6">
+                <select name="report_month" class="form-select" required>
+                  {% set month_names = ["", "Tháng 1 (Một)", "Tháng 2 (Hai)", "Tháng 3 (Ba)",
+                    "Tháng 4 (Bốn)", "Tháng 5 (Năm)", "Tháng 6 (Sáu)",
+                    "Tháng 7 (Bảy)", "Tháng 8 (Tám)", "Tháng 9 (Chín)",
+                    "Tháng 10 (Mười)", "Tháng 11 (Mười một)", "Tháng 12 (Mười hai)"] %}
+                  {% for i in range(1, 13) %}
+                  <option value="{{ i }}" {% if i == current_month %}selected{% endif %}>{{ month_names[i] }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-6">
+                <select name="report_year" class="form-select" required>
+                  {% for y in year_range %}
+                  <option value="{{ y }}" {% if y == current_year %}selected{% endif %}>Năm {{ y }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+            <div class="form-text"><i class="bi bi-info-circle me-1"></i>Chọn tháng/năm mà video này báo cáo cho</div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">File video</label>
+            <div id="dropZone" class="drop-zone border rounded-3 p-5 text-center text-muted" style="cursor:pointer; border-style:dashed!important; transition:all 0.2s;">
+              <i class="bi bi-cloud-arrow-up" style="font-size:2.5rem; color:#0d6efd;"></i>
+              <p class="mt-2 mb-1 fw-semibold">Kéo thả video vào đây</p>
+              <p class="small mb-2">hoặc</p>
+              <label class="btn btn-outline-primary btn-sm" style="cursor:pointer;">
+                <i class="bi bi-folder2-open me-1"></i>Chọn file
+                <input type="file" name="file" id="fileInput" accept=".mp4,.mov,.avi,.mkv,.webm" class="d-none" required>
+              </label>
+              <p class="small mt-3 mb-0 text-muted">Hỗ trợ: MP4, MOV, AVI, MKV, WEBM • Tối đa 500MB</p>
+              <p class="small text-muted">Video lớn hơn: dùng thư mục mạng (liên hệ admin)</p>
+            </div>
+            <div id="fileInfo" class="mt-2 d-none">
+              <div class="alert alert-info mb-0 py-2">
+                <i class="bi bi-camera-video me-2"></i>
+                <strong id="fileName"></strong> — <span id="fileSize"></span>
+              </div>
+            </div>
+          </div>
+
+          <div id="progressArea" class="d-none mb-3">
+            <div class="progress" style="height:8px;">
+              <div class="progress-bar progress-bar-striped progress-bar-animated" style="width:100%"></div>
+            </div>
+            <p class="text-muted small mt-1 text-center">Đang tải lên... vui lòng không đóng trang</p>
+          </div>
+
+          <button type="submit" class="btn btn-primary w-100" id="submitBtn">
+            <i class="bi bi-upload me-2"></i>Upload & Phân tích
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const fileInfo = document.getElementById('fileInfo');
+const fileName = document.getElementById('fileName');
+const fileSize = document.getElementById('fileSize');
+const form = document.getElementById('uploadForm');
+const submitBtn = document.getElementById('submitBtn');
+const progressArea = document.getElementById('progressArea');
+
+function showFileInfo(file) {
+  fileName.textContent = file.name;
+  fileSize.textContent = (file.size / 1048576).toFixed(1) + ' MB';
+  fileInfo.classList.remove('d-none');
+  dropZone.style.borderColor = '#0d6efd';
+  dropZone.style.background = '#f0f7ff';
+}
+
+fileInput.addEventListener('change', () => {
+  if (fileInput.files[0]) showFileInfo(fileInput.files[0]);
+});
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.style.borderColor = '#0d6efd'; });
+dropZone.addEventListener('dragleave', () => { dropZone.style.borderColor = ''; });
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  const dt = e.dataTransfer;
+  if (dt.files[0]) {
+    fileInput.files = dt.files;
+    showFileInfo(dt.files[0]);
+  }
+});
+
+form.addEventListener('submit', () => {
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Đang tải lên...';
+  progressArea.classList.remove('d-none');
+});
+</script>
+{% endblock %}

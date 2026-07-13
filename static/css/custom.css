@@ -1,0 +1,205 @@
+/* STIMS Lab — Viện Tế Bào Gốc */
+
+body {
+  background: #f4f7fa;
+  font-family: 'Segoe UI', sans-serif;
+}
+
+/* ── Chữ gợi ý (placeholder) trong textarea/input — làm nhạt hơn mặc định ── */
+.form-control::placeholder {
+  color: #adb5bd;
+  opacity: 1; /* Firefox mặc định giảm opacity thêm, ép về 1 để màu áp dụng đúng */
+}
+
+/* ── Top navbar ──────────────────────────────────────────── */
+.navbar {
+  box-shadow: 0 2px 8px rgba(0,0,0,.15);
+}
+
+/* ── Sub-nav: Module navigation bar ─────────────────────── */
+.nav-modules {
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06);
+  overflow-x: auto;
+  overflow-y: visible;
+  scrollbar-width: none;
+}
+.nav-modules::-webkit-scrollbar { display: none; }
+
+.nav-modules > .container-fluid {
+  flex-wrap: nowrap;
+  min-height: 2.75rem;
+  align-items: stretch;
+  gap: 0;
+}
+
+.nav-module-group {
+  display: flex;
+  align-items: center;
+  gap: .15rem;
+  padding: .35rem .5rem;
+  flex-shrink: 0;
+}
+
+/* Colored badge label for each system */
+.nav-module-label {
+  display: inline-flex;
+  align-items: center;
+  gap: .25rem;
+  padding: .22rem .65rem;
+  border-radius: 20px;
+  font-size: .7rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  user-select: none;
+  margin-right: .25rem;
+  /* blue badge — VidNote */
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.nav-module-label--green {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.nav-module-label--orange {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
+/* Nav links */
+.nav-module-link {
+  display: inline-flex;
+  align-items: center;
+  gap: .25rem;
+  padding: .3rem .7rem;
+  border-radius: 6px;
+  font-size: .875rem;
+  color: #475569;
+  text-decoration: none !important;
+  white-space: nowrap;
+  transition: background .15s, color .15s;
+}
+.nav-module-link:hover {
+  background: #f1f5f9;
+  color: #1d4ed8;
+}
+.nav-module-link.active {
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+.nav-module-link.active i {
+  color: #1d4ed8;
+}
+
+/* Active indicator — green variant for result module */
+.nav-module-group--green .nav-module-link.active {
+  background: #f0fdf4;
+  color: #15803d;
+}
+.nav-module-group--green .nav-module-link:hover {
+  background: #f0fdf4;
+  color: #15803d;
+}
+.nav-module-group--green .nav-module-link.active i {
+  color: #15803d;
+}
+
+/* Active indicator — orange variant for daily diary module */
+.nav-module-group--orange .nav-module-link.active {
+  background: #fff7ed;
+  color: #c2410c;
+}
+.nav-module-group--orange .nav-module-link:hover {
+  background: #fff7ed;
+  color: #c2410c;
+}
+.nav-module-group--orange .nav-module-link.active i {
+  color: #c2410c;
+}
+
+.nav-module-divider {
+  width: 1px;
+  background: #e2e8f0;
+  align-self: stretch;
+  margin: .4rem 0;
+  flex-shrink: 0;
+}
+
+/* ── Nút Tổng quan — đứng độc lập, màu riêng ─────────── */
+.nav-overview-link {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  padding: 0 1rem;
+  font-size: .875rem;
+  font-weight: 600;
+  color: #0d6efd;
+  text-decoration: none !important;
+  white-space: nowrap;
+  background: #eff6ff;
+  border-right: 1px solid #e2e8f0;
+  transition: background .15s, color .15s;
+}
+.nav-overview-link:hover {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+.nav-overview-link.active {
+  background: #dbeafe;
+  color: #1d4ed8;
+  box-shadow: inset 0 -2px 0 #1d4ed8;
+}
+
+/* Cards */
+.card {
+  border-radius: 12px;
+}
+
+.log-card {
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.log-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12) !important;
+}
+
+/* Markdown rendered content */
+.log-content h1 { font-size: 1.5rem; color: #1a3a5c; border-bottom: 2px solid #0d6efd; padding-bottom: 8px; margin-bottom: 16px; }
+.log-content h2 { font-size: 1.2rem; color: #1f618d; margin-top: 1.5em; }
+.log-content h3 { font-size: 1rem; color: #333; }
+.log-content table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+.log-content th, .log-content td { border: 1px solid #dee2e6; padding: 8px 12px; }
+.log-content th { background: #eaf4fb; font-weight: 600; }
+.log-content tr:nth-child(even) { background: #f8fafc; }
+.log-content code { background: #f4f4f4; padding: 2px 6px; border-radius: 4px; font-size: 0.88em; color: #c0392b; }
+.log-content pre { background: #f8f9fa; padding: 1em; border-radius: 8px; overflow-x: auto; }
+.log-content blockquote { border-left: 4px solid #0d6efd; padding-left: 1em; color: #666; margin: 1em 0; }
+.log-content ul, .log-content ol { padding-left: 1.5em; }
+.log-content li { margin-bottom: 4px; }
+
+/* Drop zone */
+.drop-zone {
+  border: 2px dashed #ced4da !important;
+  background: #fafbfc;
+}
+.drop-zone:hover {
+  border-color: #0d6efd !important;
+  background: #f0f7ff;
+}
+
+/* Status badges */
+.badge { font-size: 0.78em; padding: 5px 8px; }
+
+/* Comment list scrollbar */
+.comment-list::-webkit-scrollbar { width: 4px; }
+.comment-list::-webkit-scrollbar-thumb { background: #dee2e6; border-radius: 2px; }
+
+/* Table */
+.table > :not(caption) > * > * { padding: 10px 12px; }
+

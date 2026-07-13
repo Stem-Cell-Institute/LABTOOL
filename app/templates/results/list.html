@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Báo cáo kết quả của tôi{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="fw-bold mb-0"><i class="bi bi-clipboard2-data text-primary me-2"></i>Báo cáo kết quả của tôi</h4>
+  <a href="/results/new" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Nộp báo cáo tháng này</a>
+</div>
+
+{% if not reports %}
+<div class="card border-0 shadow-sm">
+  <div class="card-body text-center py-5 text-muted">
+    <i class="bi bi-clipboard2" style="font-size:3rem;opacity:.3;"></i>
+    <p class="mt-2">Bạn chưa có báo cáo nào. <a href="/results/new">Nộp báo cáo đầu tiên</a></p>
+  </div>
+</div>
+{% else %}
+<div class="row g-3">
+  {% for r in reports %}
+  {% set dec = r.manager_decision or r.ai_verdict %}
+  {% set lbl = verdict_label.get(dec, ('Chưa xét', 'secondary')) %}
+  <div class="col-md-6 col-lg-4">
+    <div class="card border-0 shadow-sm h-100"
+         style="border-left:4px solid var(--bs-{{ lbl[1] }}) !important;">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <h6 class="fw-bold mb-0">{{ months[r.report_month] }}/{{ r.report_year }}</h6>
+          {% if r.status == 'draft' %}
+            <span class="badge bg-secondary">Nháp</span>
+          {% elif r.status == 'submitted' %}
+            <span class="badge bg-info text-dark">Đã nộp</span>
+          {% else %}
+            <span class="badge bg-{{ lbl[1] }}">{{ lbl[0] }}</span>
+          {% endif %}
+        </div>
+
+        <div class="text-muted small mb-2">
+          {% if r.submitted_at %}
+            <i class="bi bi-send me-1"></i>Nộp lúc {{ r.submitted_at.strftime('%d/%m/%Y %H:%M') }}
+          {% else %}
+            <i class="bi bi-pencil me-1"></i>Cập nhật {{ r.updated_at.strftime('%d/%m/%Y') }}
+          {% endif %}
+        </div>
+
+        {% if r.ai_status == 'done' and r.ai_novelty %}
+        <div class="d-flex gap-2 mb-2">
+          <span class="badge bg-light text-dark border small">
+            <i class="bi bi-stars me-1 text-warning"></i>Mới: {{ r.ai_novelty }}/5
+          </span>
+          <span class="badge bg-light text-dark border small">
+            <i class="bi bi-lightning me-1 text-primary"></i>HT: {{ r.ai_performance }}/5
+          </span>
+        </div>
+        {% elif r.ai_status == 'running' %}
+        <div class="small text-warning"><span class="spinner-border spinner-border-sm me-1"></span>Đang phân tích...</div>
+        {% endif %}
+
+        {% if r.manager_note %}
+        <div class="alert alert-light py-1 px-2 small mb-2">
+          <i class="bi bi-chat-quote me-1 text-muted"></i>{{ r.manager_note[:100] }}{% if r.manager_note|length > 100 %}...{% endif %}
+        </div>
+        {% endif %}
+
+        <div class="d-flex gap-2 mt-auto">
+          <a href="/results/{{ r.id }}" class="btn btn-sm btn-outline-primary flex-grow-1">Xem</a>
+          {% if r.status == 'draft' %}
+          <a href="/results/{{ r.id }}/edit" class="btn btn-sm btn-outline-secondary">Sửa</a>
+          {% elif r.status == 'submitted' %}
+          <a href="/results/{{ r.id }}/edit" class="btn btn-sm btn-outline-warning">Nộp lại</a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

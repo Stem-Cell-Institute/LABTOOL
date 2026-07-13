@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+{% block title %}{{ log.title or 'Nhật ký' }}{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/logs">Nhật ký</a></li>
+    <li class="breadcrumb-item active text-truncate" style="max-width:300px;">{{ log.title }}</li>
+  </ol>
+</nav>
+
+<div class="row g-4">
+  <!-- Nội dung phân tích AI -->
+  <div class="col-lg-8">
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white border-0 pt-3 pb-0 d-flex justify-content-between align-items-center">
+        <div>
+          <span class="badge bg-secondary me-2">{{ log.video.group.name }}</span>
+          {% if log.video.report_month and log.video.report_year %}
+          <span class="badge bg-primary bg-opacity-15 text-primary border border-primary border-opacity-25 me-2">
+            <i class="bi bi-calendar3 me-1"></i>Tháng {{ log.video.report_month }}/{{ log.video.report_year }}
+          </span>
+          {% endif %}
+          <small class="text-muted">
+            <i class="bi bi-robot me-1"></i>{{ log.ai_model }} &nbsp;|&nbsp;
+            <i class="bi bi-calendar3 me-1"></i>{{ log.created_at.strftime('%d/%m/%Y %H:%M') }} &nbsp;|&nbsp;
+            <i class="bi bi-camera-video me-1"></i>
+            <a href="/videos/{{ log.video.id }}" class="text-muted">{{ log.video.original_name }}</a>
+            &nbsp;|&nbsp;
+            <i class="bi bi-person me-1"></i>
+            {% if log.video.uploader %}{{ log.video.uploader.full_name or log.video.uploader.username }}{% endif %}
+          </small>
+        </div>
+        <div class="d-flex gap-2">
+          <a href="/logs/{{ log.id }}/export/md" class="btn btn-sm btn-outline-secondary" title="Tải Markdown">
+            <i class="bi bi-markdown me-1"></i>MD
+          </a>
+          <a href="/logs/{{ log.id }}/export/pdf" class="btn btn-sm btn-outline-secondary" title="Tải PDF">
+            <i class="bi bi-file-pdf me-1"></i>PDF
+          </a>
+        </div>
+      </div>
+      <div class="card-body log-content">
+        {{ content_html|safe }}
+      </div>
+    </div>
+
+    <!-- ════════ HỎI AI ════════ -->
+    <div class="card border-0 shadow-sm" id="ask-ai">
+      <div class="card-header bg-white border-0 pt-3 pb-0">
+        <h6 class="fw-bold mb-0">
+          <i class="bi bi-chat-dots text-primary me-2"></i>Hỏi về video này
+          <span class="text-muted fw-normal small ms-2">— Hệ thống sẽ xem lại video và trả lời</span>
+        </h6>
+      </div>
+      <div class="card-body">
+
+        <!-- Form hỏi -->
+        <form method="post" action="/logs/{{ log.id }}/ask" id="askForm">
+          <div class="input-group">
+            <input type="text" name="question" class="form-control"
+                   placeholder="Ví dụ: Nhiệt độ được kiểm soát như thế nào trong thí nghiệm này?"
+                   required id="questionInput">
+            <button type="submit" class="btn btn-primary" id="askBtn">
+              <i class="bi bi-send me-1"></i>Gửi câu hỏi
+            </button>
+          </div>
+          <div class="form-text">Hệ thống sẽ phân tích video và trả lời trong vòng 30-60 giây.</div>
+        </form>
+
+        <!-- Lịch sử Q&A -->
+        {% if log.questions %}
+        <hr class="my-3">
+        <div id="qa-list">
+          {% for vq in log.questions|reverse %}
+          <div class="mb-3 rounded-3 p-3 {% if vq.status == 'done' %}bg-light{% elif vq.status == 'failed' %}bg-danger bg-opacity-10{% else %}bg-warning bg-opacity-10{% endif %}"
+               id="qa-{{ vq.id }}">
+
+            <!-- Câu hỏi -->
+            <div class="d-flex align-items-start gap-2 mb-2">
+              <span class="badge bg-primary rounded-circle p-2"><i class="bi bi-person"></i></span>
+              <div class="flex-grow-1">
+                <span class="fw-semibold small text-primary">
+                  {{ vq.asker.full_name or vq.asker.username if vq.asker else 'Người dùng' }}
+                </span>
+                <span class="text-muted small ms-2">{{ vq.created_at.strftime('%d/%m/%Y %H:%M') }}</span>
+                <div class="mt-1">{{ vq.question }}</div>
+              </div>
+            </div>
+
+            <!-- Trả lời -->
+            <div class="d-flex align-items-start gap-2 ps-2">
+              <span class="badge bg-success rounded-circle p-2"><i class="bi bi-stars"></i></span>
+              <div class="flex-grow-1">
+                {% if vq.status == 'done' %}
+                <div class="small" style="white-space:pre-wrap;">{{ vq.answer }}</div>
+                {% elif vq.status == 'failed' %}
+                <span class="text-danger small"><i class="bi bi-exclamation-circle me-1"></i>{{ vq.answer }}</span>
+                {% else %}
+                <span class="text-warning small" data-pending-id="{{ vq.id }}" data-log-id="{{ log.id }}">
+                  <span class="spinner-border spinner-border-sm me-1"></span>Đang phân tích video...
+                </span>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Sidebar: bình luận -->
+  <div class="col-lg-4">
+    <div class="card border-0 shadow-sm sticky-top" style="top:80px;" id="comments">
+      <div class="card-header bg-white border-0 pt-3 pb-2">
+        <h6 class="fw-bold mb-0">
+          <i class="bi bi-chat-dots text-primary me-2"></i>Nhận xét
+          <span class="badge bg-secondary ms-1">{{ log.comments|length }}</span>
+        </h6>
+        <div class="text-muted small">Ghi nhú của quản lý / nhóm trưởng</div>
+      </div>
+      <div class="card-body p-0">
+        {% if log.comments %}
+        <div class="p-3" style="max-height:400px; overflow-y:auto;">
+          {% for c in log.comments %}
+          <div class="mb-3 pb-3 border-bottom">
+            <div class="d-flex justify-content-between align-items-start">
+              <strong class="small">{{ c.author.full_name or c.author.username }}</strong>
+              <div class="d-flex align-items-center gap-1">
+                <small class="text-muted">{{ c.created_at.strftime('%d/%m %H:%M') }}</small>
+                {% if user.role == 'admin' or user.id == c.user_id %}
+                <form method="post" action="/comments/{{ c.id }}/delete" class="d-inline">
+                  <button type="submit" class="btn btn-link btn-sm p-0 text-danger" title="Xóa"
+                    onclick="return confirm('Xóa bình luận này?')">
+                    <i class="bi bi-trash3 small"></i>
+                  </button>
+                </form>
+                {% endif %}
+              </div>
+            </div>
+            <p class="small mb-0 mt-1" style="white-space:pre-wrap;">{{ c.content }}</p>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted small text-center py-3 mb-0">Chưa có nhận xét nào</p>
+        {% endif %}
+
+        <div class="p-3 border-top">
+          <form method="post" action="/comments/add">
+            <input type="hidden" name="log_id" value="{{ log.id }}">
+            <textarea name="content" class="form-control form-control-sm mb-2" rows="3"
+                      placeholder="Nhận xét, chỉ đạo, ghi chú..." required></textarea>
+            <button type="submit" class="btn btn-primary btn-sm w-100">
+              <i class="bi bi-send me-1"></i>Gửi nhận xét
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Disable form while submitting
+document.getElementById('askForm').addEventListener('submit', function() {
+  const btn = document.getElementById('askBtn');
+  const input = document.getElementById('questionInput');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Đang gửi...';
+  input.disabled = true;
+});
+
+// Poll for pending answers
+document.querySelectorAll('[data-pending-id]').forEach(el => {
+  const qid = el.dataset.pendingId;
+  const logId = el.dataset.logId;
+  const poll = setInterval(async () => {
+    try {
+      const r = await fetch(`/logs/${logId}/question/${qid}/status`);
+      const data = await r.json();
+      if (data.status === 'done') {
+        clearInterval(poll);
+        const div = document.querySelector(`#qa-${qid} .flex-grow-1:last-child`);
+        if (div) {
+          div.innerHTML = `<div class="small" style="white-space:pre-wrap;">${data.answer}</div>`;
+          document.querySelector(`#qa-${qid}`).classList.remove('bg-warning', 'bg-opacity-10');
+          document.querySelector(`#qa-${qid}`).classList.add('bg-light');
+        }
+      } else if (data.status === 'failed') {
+        clearInterval(poll);
+        el.innerHTML = `<span class="text-danger small"><i class="bi bi-exclamation-circle me-1"></i>${data.answer}</span>`;
+      }
+    } catch(e) {}
+  }, 5000);
+});
+</script>
+{% endblock %}

@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}Quản lý kỳ nộp báo cáo{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-3 mb-4">
+  <div>
+    <h4 class="fw-bold mb-1"><i class="bi bi-calendar-lock me-2 text-success"></i>Quản lý kỳ nộp báo cáo</h4>
+    <p class="text-muted small mb-0">
+      Mở kỳ để NCV nộp báo cáo. Đóng kỳ để khoá nộp và tự động xếp loại <strong>"Hoãn trả lương"</strong>
+      cho NCV chưa nộp.
+    </p>
+  </div>
+</div>
+
+<div class="row g-4">
+
+  <!-- Cột trái: Form mở kỳ mới -->
+  <div class="col-lg-4">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-bottom py-3">
+        <h6 class="fw-bold mb-0"><i class="bi bi-calendar-plus me-2 text-success"></i>Mở kỳ nộp mới</h6>
+      </div>
+      <div class="card-body">
+        <form method="post" action="/admin/report-periods/open">
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Tháng / Năm</label>
+            <div class="d-flex gap-2">
+              <select name="report_month" class="form-select">
+                {% for i in range(1,13) %}
+                <option value="{{ i }}" {% if i == cur_month %}selected{% endif %}>{{ month_names[i] }}</option>
+                {% endfor %}
+              </select>
+              <select name="report_year" class="form-select" style="width:110px;flex-shrink:0;">
+                {% for y in year_range %}
+                <option value="{{ y }}" {% if y == cur_year %}selected{% endif %}>{{ y }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="mb-4">
+            <label class="form-label fw-semibold small">Hạn cuối nộp <span class="text-muted fw-normal">(tuỳ chọn)</span></label>
+            <input type="datetime-local" name="deadline_str" class="form-control"
+                   title="Để trống nếu không giới hạn thời gian">
+            <div class="form-text">Để trống nếu không muốn hiện đồng hồ đếm ngược.</div>
+          </div>
+          <button type="submit" class="btn btn-success w-100">
+            <i class="bi bi-unlock me-1"></i>Mở kỳ nộp
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <div class="alert alert-warning mt-3 small">
+      <i class="bi bi-exclamation-triangle me-1"></i>
+      <strong>Khi đóng kỳ:</strong> Hệ thống sẽ tự động tạo kết quả
+      <strong>"Hoãn trả lương tháng này"</strong> cho tất cả NCV chưa nộp báo cáo.
+      Hành động này <u>không thể hoàn tác tự động</u> — bạn có thể xoá thủ công từng báo cáo nếu cần.
+    </div>
+  </div>
+
+  <!-- Cột phải: Danh sách kỳ -->
+  <div class="col-lg-8">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+        <h6 class="fw-bold mb-0">Danh sách kỳ nộp</h6>
+        <span class="badge bg-secondary">Tổng NCV: {{ total_users }}</span>
+      </div>
+      {% if periods %}
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 small">
+          <thead class="table-light">
+            <tr>
+              <th>Kỳ</th>
+              <th>Hạn cuối</th>
+              <th class="text-center">Đã nộp</th>
+              <th class="text-center">Trạng thái</th>
+              <th>Đóng bởi</th>
+              <th class="text-center">Thao tác</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in periods %}
+            <tr>
+              <td class="fw-semibold">{{ month_names[p.report_month] }}/{{ p.report_year }}</td>
+              <td>
+                {% if p.deadline %}
+                  <span class="{% if not p.is_open %}text-muted{% elif p.deadline < now %}text-danger fw-semibold{% else %}text-dark{% endif %}">
+                    {{ p.deadline.strftime('%d/%m/%Y %H:%M') }}
+                  </span>
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td class="text-center">
+                <span class="fw-semibold {% if counts[p.id] == total_users %}text-success{% elif counts[p.id] == 0 %}text-danger{% else %}text-warning{% endif %}">
+                  {{ counts[p.id] }}/{{ total_users }}
+                </span>
+              </td>
+              <td class="text-center">
+                {% if p.is_open %}
+                  <span class="badge bg-success"><i class="bi bi-unlock me-1"></i>Đang mở</span>
+                {% else %}
+                  <span class="badge bg-secondary"><i class="bi bi-lock me-1"></i>Đã đóng</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if p.closed_by and p.closer %}
+                  <span class="text-muted">{{ p.closer.full_name or p.closer.username }}</span>
+                  <div style="font-size:.72rem;" class="text-muted">{{ p.closed_at.strftime('%d/%m/%Y %H:%M') if p.closed_at else '' }}</div>
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td class="text-center">
+                {% if p.is_open %}
+                <form method="post" action="/admin/report-periods/{{ p.id }}/close" class="d-inline"
+                      onsubmit="return confirmClose('{{ month_names[p.report_month] }}/{{ p.report_year }}', {{ total_users - counts[p.id] }})">
+                  <button type="submit" class="btn btn-sm btn-danger">
+                    <i class="bi bi-lock me-1"></i>Đóng kỳ
+                  </button>
+                </form>
+                {% else %}
+                <form method="post" action="/admin/report-periods/{{ p.id }}/reopen" class="d-inline">
+                  <button type="submit" class="btn btn-sm btn-outline-success">
+                    <i class="bi bi-unlock me-1"></i>Mở lại
+                  </button>
+                </form>
+                {% endif %}
+                <a href="/results/monthly?year={{ p.report_year }}&month={{ p.report_month }}"
+                   class="btn btn-sm btn-outline-secondary ms-1">
+                  <i class="bi bi-eye"></i>
+                </a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="text-center py-5 text-muted">
+        <i class="bi bi-calendar-x" style="font-size:3rem;opacity:.25;"></i>
+        <p class="mt-2">Chưa có kỳ nộp nào. Tạo kỳ đầu tiên ở bên trái.</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function confirmClose(period, missing) {
+  if (missing === 0) {
+    return confirm(`Đóng kỳ ${period}?\nTất cả NCV đã nộp báo cáo.`);
+  }
+  return confirm(
+    `Đóng kỳ ${period}?\n\n` +
+    `⚠️ ${missing} NCV chưa nộp báo cáo sẽ tự động bị xếp loại:\n` +
+    `"Hoãn trả lương tháng này"\n\n` +
+    `Tiếp tục?`
+  );
+}
+</script>
+{% endblock %}

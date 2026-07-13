@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Kết quả {{ month_name }} {{ year }}{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center gap-3 mb-4">
+  <a href="/results/overview?year={{ year }}{% if selected_group %}&group_id={{ selected_group }}{% endif %}"
+     class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i></a>
+  <h4 class="mb-0 fw-bold">
+    <i class="bi bi-clipboard2-data text-primary me-2"></i>Kết quả {{ month_name }}/{{ year }}
+  </h4>
+  <span class="badge bg-primary fs-6">{{ reports|length }} báo cáo</span>
+  <span class="badge bg-danger fs-6">{{ missing_users|length }} chưa nộp</span>
+</div>
+
+<!-- Filter nhóm -->
+<div class="d-flex gap-2 mb-4 flex-wrap">
+  <a href="/results/monthly?year={{ year }}&month={{ month }}"
+     class="btn btn-sm {% if not selected_group %}btn-primary{% else %}btn-outline-secondary{% endif %}">Tất cả</a>
+  {% for g in groups %}
+  <a href="/results/monthly?year={{ year }}&month={{ month }}&group_id={{ g.id }}"
+     class="btn btn-sm {% if selected_group == g.id %}btn-primary{% else %}btn-outline-secondary{% endif %}">{{ g.name }}</a>
+  {% endfor %}
+</div>
+
+<div class="row g-4">
+  <!-- Đã nộp -->
+  <div class="col-lg-8">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-0 pt-3 pb-0">
+        <h6 class="fw-bold mb-0 text-success"><i class="bi bi-check-circle me-2"></i>Đã nộp ({{ reports|length }})</h6>
+      </div>
+      <div class="card-body p-0">
+        {% if reports %}
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0 small">
+            <thead class="table-light">
+              <tr><th>Nghiên cứu viên</th><th>Nhóm</th><th>Nộp lúc</th><th>Đề xuất đánh giá</th><th>BQL quyết định</th><th></th></tr>
+            </thead>
+            <tbody>
+              {% for r in reports %}
+              {% set dec = r.manager_decision or r.ai_verdict %}
+              {% set lbl = verdict_label.get(dec, ('Chờ', 'secondary')) %}
+              <tr>
+                <td class="fw-semibold">{{ r.author.full_name or r.author.username }}</td>
+                <td><span class="badge bg-secondary">{{ r.group.name }}</span></td>
+                <td class="text-muted">{{ r.submitted_at.strftime('%d/%m %H:%M') if r.submitted_at else '—' }}</td>
+                <td>
+                  {% if r.ai_status == 'done' and r.ai_verdict %}
+                    {% set av = verdict_label.get(r.ai_verdict, ('?','secondary')) %}
+                    <span class="badge bg-{{ av[1] }}">{{ av[0] }}</span>
+                    {% if r.ai_novelty %}<span class="badge bg-light text-dark border ms-1">{{ r.ai_novelty }}/5</span>{% endif %}
+                  {% elif r.ai_status in ('pending','running') %}
+                    <span class="spinner-border spinner-border-sm text-primary"></span>
+                  {% else %}—{% endif %}
+                </td>
+                <td>
+                  {% if r.status == 'reviewed' %}
+                    <span class="badge bg-{{ verdict_label.get(r.manager_decision, ('','secondary'))[1] }}">
+                      {{ verdict_label.get(r.manager_decision, ('—','secondary'))[0] }}
+                    </span>
+                  {% else %}
+                    <span class="text-muted small">Chưa duyệt</span>
+                  {% endif %}
+                </td>
+                <td><a href="/results/{{ r.id }}" class="btn btn-sm btn-outline-primary">Xem & Duyệt</a></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="text-center py-4 text-muted mb-0">Chưa có ai nộp báo cáo tháng này.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Chưa nộp -->
+  <div class="col-lg-4">
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-white border-0 pt-3 pb-0">
+        <h6 class="fw-bold mb-0 text-danger"><i class="bi bi-x-circle me-2"></i>Chưa nộp ({{ missing_users|length }})</h6>
+      </div>
+      <div class="card-body p-0">
+        {% if missing_users %}
+        <div class="list-group list-group-flush">
+          {% set pg = namespace(id=-1) %}
+          {% for u in missing_users %}
+          {% if u.group_id != pg.id %}{% set pg.id = u.group_id %}
+          {% if u.group %}<div class="list-group-item list-group-item-secondary py-1 small fw-semibold border-0">{{ u.group.name }}</div>{% endif %}
+          {% endif %}
+          <div class="list-group-item border-0 d-flex justify-content-between align-items-center px-3 py-2">
+            <span class="small fw-semibold">{{ u.full_name or u.username }}</span>
+            <span class="badge bg-danger bg-opacity-15 text-danger border border-danger border-opacity-25 small">Chưa nộp</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-3 text-success small"><i class="bi bi-check-circle me-1"></i>Tất cả đã nộp!</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Điều hướng -->
+    <div class="card border-0 shadow-sm">
+      <div class="card-body py-2">
+        {% set pm = month-1 %}{% set py = year %}{% if pm==0 %}{% set pm=12 %}{% set py=year-1 %}{% endif %}
+        {% set nm = month+1 %}{% set ny = year %}{% if nm==13 %}{% set nm=1 %}{% set ny=year+1 %}{% endif %}
+        <div class="d-flex justify-content-between">
+          <a href="/results/monthly?year={{ py }}&month={{ pm }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-chevron-left"></i> Tháng trước
+          </a>
+          <a href="/results/monthly?year={{ ny }}&month={{ nm }}" class="btn btn-outline-secondary btn-sm">
+            Tháng sau <i class="bi bi-chevron-right"></i>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

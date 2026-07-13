@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Sửa sổ tay' if notebook else 'Tạo sổ tay mới' }}{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center gap-3 mb-4">
+  <a href="{% if notebook %}/notebooks/{{ notebook.id }}{% else %}/notebooks{% endif %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i></a>
+  <h4 class="mb-0 fw-bold"><i class="bi bi-journal-bookmark-fill me-2" style="color:#c2410c;"></i>{{ 'Sửa thông tin sổ tay' if notebook else 'Tạo sổ tay mới' }}</h4>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <form method="post" action="/notebooks/save">
+          {% if notebook %}<input type="hidden" name="notebook_id" value="{{ notebook.id }}">{% endif %}
+          <div class="mb-4">
+            <label class="form-label fw-semibold">Tên đề tài/dự án <span class="text-danger">*</span></label>
+            <input type="text" name="topic_name" class="form-control" required
+                   value="{{ notebook.topic_name if notebook else '' }}"
+                   placeholder="VD: Nghiên cứu đặc tính kháng khuẩn của...">
+          </div>
+
+          {% set gi = notebook %}
+          {% include "_general_info_fields.html" %}
+
+          {% if not notebook %}
+          <div class="alert alert-light border small mb-4">
+            <i class="bi bi-info-circle me-1"></i>
+            Sổ tay là nơi lưu Thông tin chung cho nhật ký cá nhân của bạn (không thuộc project nào).
+            Bạn có thể tạo nhiều sổ tay theo thời gian, mỗi sổ mang thông tin riêng.
+          </div>
+          {% endif %}
+
+          <button type="submit" class="btn" style="background:#c2410c;color:#fff;">
+            <i class="bi bi-check-lg me-1"></i>{{ 'Lưu thay đổi' if notebook else 'Tạo sổ tay' }}
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

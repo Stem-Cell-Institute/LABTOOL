@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Đăng nhập — STIMS-SCI</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    body { background: linear-gradient(135deg, #1a3a5c 0%, #0d6efd 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    .login-card { border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); max-width: 420px; width: 100%; }
+    .logo-area { background: #0d6efd; border-radius: 16px 16px 0 0; padding: 2rem; text-align: center; color: white; }
+  </style>
+</head>
+<body>
+<div class="login-card bg-white">
+  <div class="logo-area">
+    <i class="bi bi-activity" style="font-size:2.5rem;"></i>
+    <h4 class="mt-2 mb-0 fw-bold">STIMS-SCI</h4>
+    <p class="mb-0 opacity-75">Module Quản lý báo cáo công việc hằng tháng</p>
+    <small class="opacity-50">của Nghiên cứu viên — Viện Tế Bào Gốc</small>
+  </div>
+  <div class="p-4">
+    {% if flash %}
+    <div class="alert alert-success py-2 small">
+      <i class="bi bi-check-circle me-2"></i>{{ flash }}
+    </div>
+    {% endif %}
+    {% if error %}
+    <div class="alert alert-danger py-2">
+      <i class="bi bi-exclamation-triangle me-2"></i>{{ error }}
+    </div>
+    {% endif %}
+    <form method="post" action="/login">
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Tên đăng nhập</label>
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-person"></i></span>
+          <input type="text" name="username" class="form-control" placeholder="username" required autofocus>
+        </div>
+      </div>
+      <div class="mb-4">
+        <label class="form-label fw-semibold">Mật khẩu</label>
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-lock"></i></span>
+          <input type="password" name="password" class="form-control" placeholder="••••••••" required>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary w-100 btn-lg">
+        <i class="bi bi-box-arrow-in-right me-2"></i>Đăng nhập
+      </button>
+    </form>
+    {% if show_check_status %}
+    <div class="text-center mt-2">
+      <a href="/check-status" class="btn btn-outline-warning btn-sm">
+        <i class="bi bi-search me-1"></i>Kiểm tra trạng thái tài khoản
+      </a>
+    </div>
+    {% endif %}
+    <hr class="my-3">
+    <div class="d-flex justify-content-between align-items-center">
+      <span class="text-muted small">Chưa có tài khoản?</span>
+      <div class="d-flex gap-2">
+        <a href="/check-status" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-search me-1"></i>Trạng thái
+        </a>
+        <a href="/register" class="btn btn-outline-primary btn-sm">
+          <i class="bi bi-person-plus me-1"></i>Đăng ký
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

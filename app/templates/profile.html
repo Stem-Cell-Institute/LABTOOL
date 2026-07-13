@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Hồ sơ cá nhân{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-0 pt-3 pb-2 d-flex align-items-center gap-2">
+        <i class="bi bi-person-circle fs-4 text-primary"></i>
+        <div>
+          <h5 class="fw-bold mb-0">Hồ sơ cá nhân</h5>
+          <div class="text-muted small">
+            {{ user.username }}
+            {% if user.group %}<span class="badge bg-secondary ms-1">{{ user.group.name }}</span>{% endif %}
+            <span class="badge bg-{{ 'danger' if user.role == 'admin' else 'info text-dark' }} ms-1">
+              {{ 'Admin' if user.role == 'admin' else 'Thành viên' }}
+            </span>
+          </div>
+        </div>
+      </div>
+      <div class="card-body">
+
+        {% if flash %}
+        <div class="alert alert-success py-2">
+          <i class="bi bi-check-circle me-2"></i>{{ flash }}
+        </div>
+        {% endif %}
+        {% if error %}
+        <div class="alert alert-danger py-2">
+          <i class="bi bi-exclamation-triangle me-2"></i>{{ error }}
+        </div>
+        {% endif %}
+
+        <form method="post" action="/profile">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Tên đăng nhập</label>
+            <input type="text" class="form-control" value="{{ user.username }}" disabled>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Họ tên <span class="text-danger">*</span></label>
+            <input type="text" name="full_name" class="form-control" value="{{ user.full_name }}" required>
+          </div>
+          <div class="mb-4">
+            <label class="form-label fw-semibold">Email</label>
+            <input type="email" name="email" class="form-control" value="{{ user.email }}" placeholder="(tuỳ chọn)">
+          </div>
+
+          <hr>
+          <h6 class="text-muted mb-3"><i class="bi bi-key me-1"></i>Đổi mật khẩu <span class="fw-normal">(để trống nếu không đổi)</span></h6>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Mật khẩu hiện tại</label>
+            <input type="password" name="current_password" class="form-control" placeholder="Nhập mật khẩu hiện tại">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Mật khẩu mới</label>
+            <input type="password" name="new_password" class="form-control" placeholder="Tối thiểu 6 ký tự">
+          </div>
+          <div class="mb-4">
+            <label class="form-label fw-semibold">Xác nhận mật khẩu mới</label>
+            <input type="password" name="confirm_new_password" class="form-control" placeholder="Nhập lại mật khẩu mới">
+          </div>
+
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-save me-1"></i>Lưu thay đổi
+          </button>
+          <a href="/" class="btn btn-outline-secondary ms-2">Huỷ</a>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

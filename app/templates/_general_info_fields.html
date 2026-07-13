@@ -1,0 +1,41 @@
+{# Partial dùng chung cho projects/form.html và notebooks/form.html — Thông tin chung.
+   Biến truyền vào: gi (Project hoặc Notebook, có thể None khi tạo mới) #}
+<details class="mb-4" {% if gi and (gi.topic_code or gi.researcher_name or gi.student_id or gi.class_info or gi.supervisor or gi.co_supervisor or gi.start_date or gi.end_date) %}open{% endif %}>
+  <summary class="fw-semibold mb-2" style="cursor:pointer;">
+    <i class="bi bi-card-list me-1"></i>Thông tin chung <span class="text-muted fw-normal small">(không bắt buộc — có thể điền sau)</span>
+  </summary>
+  <div class="row g-3 mt-1">
+    <div class="col-md-6">
+      <label class="form-label small fw-semibold mb-1">Mã số đề tài <span class="text-muted fw-normal">(nếu có)</span></label>
+      <input type="text" name="topic_code" class="form-control form-control-sm" value="{{ gi.topic_code if gi else '' }}">
+    </div>
+    <div class="col-md-6">
+      <label class="form-label small fw-semibold mb-1">Họ và tên người thực hiện</label>
+      <input type="text" name="researcher_name" class="form-control form-control-sm" value="{{ gi.researcher_name if gi else '' }}">
+    </div>
+    <div class="col-md-6">
+      <label class="form-label small fw-semibold mb-1">Mã số sinh viên/học viên/NCS</label>
+      <input type="text" name="student_id" class="form-control form-control-sm" value="{{ gi.student_id if gi else '' }}">
+    </div>
+    <div class="col-md-6">
+      <label class="form-label small fw-semibold mb-1">Lớp/Khóa/Khoa/Viện</label>
+      <input type="text" name="class_info" class="form-control form-control-sm" value="{{ gi.class_info if gi else '' }}">
+    </div>
+    <div class="col-md-6">
+      <label class="form-label small fw-semibold mb-1">Người hướng dẫn</label>
+      <input type="text" name="supervisor" class="form-control form-control-sm" value="{{ gi.supervisor if gi else '' }}">
+    </div>
+    <div class="col-md-6">
+      <label class="form-label small fw-semibold mb-1">Đồng hướng dẫn <span class="text-muted fw-normal">(nếu có)</span></label>
+      <input type="text" name="co_supervisor" class="form-control form-control-sm" value="{{ gi.co_supervisor if gi else '' }}">
+    </div>
+    <div class="col-md-6">
+      <label class="form-label small fw-semibold mb-1">Ngày bắt đầu</label>
+      <input type="date" name="start_date" class="form-control form-control-sm" value="{{ gi.start_date.strftime('%Y-%m-%d') if gi and gi.start_date else '' }}">
+    </div>
+    <div class="col-md-6">
+      <label class="form-label small fw-semibold mb-1">Ngày kết thúc</label>
+      <input type="date" name="end_date" class="form-control form-control-sm" value="{{ gi.end_date.strftime('%Y-%m-%d') if gi and gi.end_date else '' }}">
+    </div>
+  </div>
+</details>

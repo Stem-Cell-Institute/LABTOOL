@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Nhật ký hoạt động{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="mb-0 fw-bold"><i class="bi bi-journal-richtext text-primary me-2"></i>Nhật ký hoạt động</h4>
+  <span class="badge bg-secondary fs-6">{{ logs|length }} bản ghi</span>
+</div>
+
+<!-- Filter -->
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-body">
+    <form method="get" action="/admin/activity" class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label small fw-semibold mb-1">Loại hành động</label>
+        <select name="action" class="form-select form-select-sm">
+          <option value="">Tất cả</option>
+          {% for key, (icon, color, label) in action_meta.items() %}
+          <option value="{{ key }}" {% if filter_action == key %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small fw-semibold mb-1">Nhóm</label>
+        <select name="group_id" class="form-select form-select-sm">
+          <option value="">Tất cả nhóm</option>
+          {% for g in groups %}
+          <option value="{{ g.id }}" {% if filter_group == g.id %}selected{% endif %}>{{ g.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small fw-semibold mb-1">Người dùng</label>
+        <input type="text" name="username" class="form-control form-control-sm"
+               placeholder="username..." value="{{ filter_username }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold mb-1">Số bản ghi</label>
+        <select name="limit" class="form-select form-select-sm">
+          <option value="50"  {% if limit == 50  %}selected{% endif %}>50</option>
+          <option value="100" {% if limit == 100 %}selected{% endif %}>100</option>
+          <option value="200" {% if limit == 200 %}selected{% endif %}>200</option>
+          <option value="500" {% if limit == 500 %}selected{% endif %}>500</option>
+        </select>
+      </div>
+      <div class="col-md-1">
+        <button type="submit" class="btn btn-primary btn-sm w-100"><i class="bi bi-search"></i></button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Timeline -->
+<div class="card border-0 shadow-sm">
+  <div class="card-body p-0">
+    {% if logs %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 small">
+        <thead class="table-light">
+          <tr>
+            <th style="width:130px;">Thời gian</th>
+            <th style="width:150px;">Loại</th>
+            <th>Mô tả</th>
+            <th style="width:130px;">Người thực hiện</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set prev_date = namespace(val="") %}
+          {% for entry in logs %}
+          {% set date_str = entry.created_at.strftime('%d/%m/%Y') %}
+          {% if date_str != prev_date.val %}
+          {% set prev_date.val = date_str %}
+          <tr class="table-secondary">
+            <td colspan="4" class="fw-semibold py-1 px-3">
+              <i class="bi bi-calendar3 me-2"></i>{{ date_str }}
+            </td>
+          </tr>
+          {% endif %}
+
+          {% set meta = action_meta.get(entry.action, ("bi-circle", "secondary", entry.action)) %}
+          <tr>
+            <td class="text-muted">{{ entry.created_at.strftime('%H:%M:%S') }}</td>
+            <td>
+              <span class="badge bg-{{ meta[1] }} bg-opacity-15 text-{{ meta[1] }} border border-{{ meta[1] }} border-opacity-25">
+                <i class="bi {{ meta[0] }} me-1"></i>{{ meta[2] }}
+              </span>
+            </td>
+            <td>{{ entry.description }}</td>
+            <td>
+              {% if entry.user_id and entry.user_id in user_cache and user_cache[entry.user_id] %}
+                <i class="bi bi-person me-1 text-muted"></i>{{ user_cache[entry.user_id].username }}
+              {% else %}
+                <span class="text-muted">Hệ thống</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-journal" style="font-size:3rem; opacity:0.3;"></i>
+      <p class="mt-2">Chưa có hoạt động nào được ghi lại.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

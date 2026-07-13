@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}STIMS-SCI{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="/static/css/custom.css?v=6" rel="stylesheet">
+  <style>
+    .nav-module-link { text-decoration: none !important; }
+    .nav-modules a   { text-decoration: none !important; }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════ THANH TRÊN: Brand + Controls ══════════════ -->
+<nav class="navbar navbar-dark bg-primary py-2">
+  <div class="container-fluid">
+
+    <!-- Brand -->
+    <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="/">
+      <i class="bi bi-activity fs-5 flex-shrink-0" id="siteLogoIcon"></i>
+      <img id="siteLogo" alt="Logo"
+           style="height:32px;width:32px;object-fit:contain;border-radius:6px;display:none;flex-shrink:0;">
+      <div class="lh-sm">
+        <div>STIMS-SCI</div>
+        <div class="fw-light" style="font-size:.75rem;opacity:.85;white-space:nowrap;">
+          Module Quản lý báo cáo công việc hằng tháng của Nghiên cứu viên
+        </div>
+      </div>
+    </a>
+
+    {% if user %}
+    <div class="d-flex align-items-center gap-2">
+
+      <!-- Admin dropdown -->
+      {% if user.role == 'admin' %}
+      <div class="dropdown">
+        <a class="btn btn-sm btn-outline-light dropdown-toggle d-flex align-items-center gap-1"
+           href="#" data-bs-toggle="dropdown">
+          <i class="bi bi-gear"></i><span class="d-none d-md-inline">Quản trị</span>
+          <span id="pendingBadge" class="badge bg-danger rounded-pill ms-1" style="display:none;font-size:.65rem;"></span>
+        </a>
+        <ul class="dropdown-menu dropdown-menu-end">
+          <li><h6 class="dropdown-header"><i class="bi bi-people me-1"></i>Quản lý</h6></li>
+          <li><a class="dropdown-item" href="/admin/groups"><i class="bi bi-people me-2 text-secondary"></i>Nhóm nghiên cứu</a></li>
+          <li><a class="dropdown-item" href="/admin/users"><i class="bi bi-person-gear me-2 text-secondary"></i>Tài khoản</a></li>
+          <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#logoUploadModal">
+            <i class="bi bi-image me-2 text-secondary"></i>Đổi logo hệ thống
+          </a></li>
+          <li><hr class="dropdown-divider"></li>
+          <li><h6 class="dropdown-header"><i class="bi bi-camera-video me-1"></i>VidNote</h6></li>
+          <li><a class="dropdown-item" href="/admin/reports"><i class="bi bi-calendar3 me-2 text-secondary"></i>Báo cáo Video</a></li>
+          <li><hr class="dropdown-divider"></li>
+          <li><h6 class="dropdown-header"><i class="bi bi-clipboard2-data me-1"></i>Kết quả Nghiên cứu</h6></li>
+          <li><a class="dropdown-item" href="/results/overview"><i class="bi bi-table me-2 text-secondary"></i>Bảng theo dõi kết quả</a></li>
+          <li><a class="dropdown-item" href="/results/monthly"><i class="bi bi-calendar-month me-2 text-secondary"></i>Chi tiết tháng này</a></li>
+          <li><a class="dropdown-item" href="/admin/report-periods"><i class="bi bi-calendar-lock me-2 text-secondary"></i>Quản lý kỳ nộp</a></li>
+          <li><a class="dropdown-item" href="/admin/ai-settings"><i class="bi bi-sliders me-2 text-secondary"></i>Cài đặt AI</a></li>
+          <li><hr class="dropdown-divider"></li>
+          <li><h6 class="dropdown-header"><i class="bi bi-journal-text me-1"></i>Nhật ký thí nghiệm</h6></li>
+          <li><a class="dropdown-item" href="/diary/overview"><i class="bi bi-table me-2 text-secondary"></i>Tổng quan nhật ký</a></li>
+          <li><a class="dropdown-item" href="/diary/ask-ai"><i class="bi bi-stars me-2 text-secondary"></i>Hỏi AI nhật ký</a></li>
+          <li><a class="dropdown-item" href="/admin/diary-settings"><i class="bi bi-shield-lock me-2 text-secondary"></i>Cài đặt khoá nhật ký</a></li>
+          <li><hr class="dropdown-divider"></li>
+          <li><h6 class="dropdown-header"><i class="bi bi-bar-chart me-1"></i>Giám sát</h6></li>
+          <li><a class="dropdown-item" href="/admin/stats"><i class="bi bi-bar-chart me-2 text-secondary"></i>Thống kê</a></li>
+          <li><a class="dropdown-item" href="/admin/activity"><i class="bi bi-journal-richtext me-2 text-secondary"></i>Nhật ký hoạt động</a></li>
+          <li><a class="dropdown-item" href="/admin/issues"><i class="bi bi-exclamation-triangle me-2 text-secondary"></i>Video lỗi</a></li>
+        </ul>
+      </div>
+      {% endif %}
+
+      <!-- User dropdown -->
+      <div class="dropdown">
+        <a class="btn btn-sm btn-light text-primary fw-semibold dropdown-toggle d-flex align-items-center gap-1"
+           href="#" data-bs-toggle="dropdown">
+          <i class="bi bi-person-circle"></i>
+          <span class="d-none d-sm-inline">{{ user.full_name or user.username }}</span>
+          {% if user.group %}<span class="badge bg-primary ms-1">{{ user.group.name }}</span>{% endif %}
+        </a>
+        <ul class="dropdown-menu dropdown-menu-end">
+          <li class="dropdown-header text-muted small">
+            {{ user.full_name or user.username }}
+            {% if user.role == 'admin' %}
+              <span class="badge bg-danger ms-1">Admin</span>
+            {% elif user.can_view_all %}
+              <span class="badge bg-warning text-dark ms-1"><i class="bi bi-star-fill me-1"></i>Viện trưởng</span>
+            {% else %}
+              <span class="badge bg-secondary ms-1">Thành viên</span>
+            {% endif %}
+          </li>
+          <li><hr class="dropdown-divider"></li>
+          <li><a class="dropdown-item" href="/profile"><i class="bi bi-person me-2"></i>Hồ sơ</a></li>
+          <li><hr class="dropdown-divider"></li>
+          <li><a class="dropdown-item text-danger" href="/logout"><i class="bi bi-box-arrow-right me-2"></i>Đăng xuất</a></li>
+        </ul>
+      </div>
+
+    </div>
+    {% endif %}
+
+  </div>
+</nav>
+
+<!-- ══════════════ THANH DƯỚI: Module Navigation ══════════════ -->
+{% if user %}
+<div class="nav-modules border-bottom">
+  <div class="container-fluid d-flex align-items-stretch" style="overflow-x:auto;">
+
+    <!-- ── Tổng quan (toàn hệ thống) ────────────────────── -->
+    <a class="nav-overview-link {% if request.url.path == '/' %}active{% endif %}" href="/">
+      <i class="bi bi-grid-3x3-gap-fill me-1"></i>Tổng quan
+    </a>
+
+    <!-- ── Divider ─────────────────────────────────────── -->
+    <div class="nav-module-divider"></div>
+
+    <!-- ── NHẬT KÝ THÍ NGHIỆM ────────────────────────── -->
+    <div class="nav-module-group nav-module-group--orange">
+      <span class="nav-module-label nav-module-label--orange">
+        <i class="bi bi-journal-text me-1"></i>Nhật ký thí nghiệm
+      </span>
+      <a class="nav-module-link {% if request.url.path == '/diary' %}active{% endif %}" href="/diary">
+        <i class="bi bi-journal me-1"></i>Nhật ký của tôi
+      </a>
+      <a class="nav-module-link {% if request.url.path == '/diary/new' %}active{% endif %}" href="/diary/new">
+        <i class="bi bi-journal-plus me-1"></i>Ghi nhật ký
+      </a>
+      <a class="nav-module-link {% if request.url.path.startswith('/projects') %}active{% endif %}" href="/projects"
+         data-bs-toggle="tooltip" data-bs-placement="bottom"
+         title="Dùng khi làm việc theo NHÓM: nhiều nghiên cứu viên cùng tham gia, xem được nhật ký của nhau, có thể chia thành đề tài nhánh giao cho từng người phụ trách.">
+        <i class="bi bi-kanban me-1"></i>Project
+      </a>
+      <a class="nav-module-link {% if request.url.path.startswith('/notebooks') %}active{% endif %}" href="/notebooks"
+         data-bs-toggle="tooltip" data-bs-placement="bottom"
+         title="Dùng khi ghi chép CÁ NHÂN: chỉ riêng bạn xem được, không chia sẻ với ai. Lưu Thông tin chung (mã đề tài, người hướng dẫn, ngày bắt đầu/kết thúc...) cho nhật ký không thuộc project nào.">
+        <i class="bi bi-journal-bookmark me-1"></i>Sổ tay
+      </a>
+      {% if user.can_view_all and user.role != 'admin' %}
+      <a class="nav-module-link {% if request.url.path == '/diary/overview' %}active{% endif %}" href="/diary/overview">
+        <i class="bi bi-table me-1"></i>Tổng quan
+      </a>
+      {% endif %}
+    </div>
+
+    <!-- ── Divider ─────────────────────────────────────── -->
+    <div class="nav-module-divider"></div>
+
+    <!-- ── KẾT QUẢ NGHIÊN CỨU ───────────────────────── -->
+    <div class="nav-module-group nav-module-group--green">
+      <span class="nav-module-label nav-module-label--green">
+        <i class="bi bi-clipboard2-data me-1"></i>Kết quả Nghiên cứu
+      </span>
+      <a class="nav-module-link {% if request.url.path == '/results' %}active{% endif %}" href="/results">
+        <i class="bi bi-person-lines-fill me-1"></i>Báo cáo của tôi
+      </a>
+      <a class="nav-module-link {% if request.url.path == '/results/new' %}active{% endif %}" href="/results/new" id="navSubmitLink">
+        <i class="bi bi-clipboard2-plus me-1"></i>Nộp báo cáo<span id="periodNavBadge" class="ms-1"></span>
+      </a>
+      {% if user.can_view_all and user.role != 'admin' %}
+      <a class="nav-module-link {% if request.url.path == '/results/overview' %}active{% endif %}" href="/results/overview">
+        <i class="bi bi-table me-1"></i>Ma trận
+      </a>
+      <a class="nav-module-link {% if request.url.path == '/results/monthly' %}active{% endif %}" href="/results/monthly">
+        <i class="bi bi-calendar-month me-1"></i>Tháng này
+      </a>
+      {% endif %}
+    </div>
+
+    <!-- Divider ─────────────────────────────────────── -->
+    <div class="nav-module-divider"></div>
+
+    <!-- ── VIDNOTE ─────────────────────────────────────── -->
+    <div class="nav-module-group">
+      <span class="nav-module-label">
+        <i class="bi bi-camera-video me-1"></i>VidNote
+      </span>
+      <a class="nav-module-link {% if request.url.path.startswith('/videos') %}active{% endif %}" href="/videos">
+        <i class="bi bi-play-circle me-1"></i>Video
+      </a>
+      <a class="nav-module-link {% if request.url.path.startswith('/logs') %}active{% endif %}" href="/logs">
+        <i class="bi bi-journal-text me-1"></i>Nhật ký
+      </a>
+    </div>
+
+  </div>
+</div>
+{% endif %}
+
+<!-- ══════════════ NỘI DUNG TRANG ══════════════ -->
+<div class="container-fluid py-3 px-4">
+  {% if flash %}
+    {% if flash.startswith('error:') %}
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+      <i class="bi bi-exclamation-triangle me-2"></i>{{ flash[6:] }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% else %}
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+      <i class="bi bi-check-circle me-2"></i>{{ flash }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
+  {% endif %}
+
+  {% block content %}{% endblock %}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/static/js/app.js"></script>
+<script>document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootstrap.Tooltip(el));</script>
+{% if user %}
+<script>
+// Badge tài khoản chờ duyệt (chỉ admin)
+{% if user.role == 'admin' %}
+(function() {
+  fetch('/admin/users/pending-count')
+    .then(r => r.ok ? r.json() : null)
+    .then(d => {
+      if (!d || d.count === 0) return;
+      const b = document.getElementById('pendingBadge');
+      if (b) { b.textContent = d.count; b.style.display = ''; }
+    }).catch(() => {});
+})();
+{% endif %}
+
+(function () {
+  const badge = document.getElementById('periodNavBadge');
+  if (!badge) return;
+
+  fetch('/results/period-status')
+    .then(r => r.ok ? r.json() : null)
+    .then(d => {
+      if (!d || d.status === 'no_period') return;
+
+      if (d.status === 'closed') {
+        badge.innerHTML = '<span class="badge bg-danger ms-1" style="font-size:.65rem;vertical-align:middle;">Đã đóng</span>';
+        return;
+      }
+
+      // Đang mở — không có deadline
+      if (!d.deadline) {
+        badge.innerHTML = '<span class="badge bg-success ms-1" style="font-size:.65rem;vertical-align:middle;">Đang mở</span>';
+        return;
+      }
+
+      // Đang mở — có deadline → đồng hồ đếm ngược
+      const deadline = new Date(d.deadline + (d.deadline.endsWith('Z') ? '' : 'Z'));
+
+      function fmt(diff) {
+        if (diff <= 0) return null;
+        const d_ = Math.floor(diff / 86400000);
+        const h  = Math.floor((diff % 86400000) / 3600000);
+        const m  = Math.floor((diff % 3600000) / 60000);
+        const s  = Math.floor((diff % 60000) / 1000);
+        if (d_ > 1)  return `còn ${d_} ngày`;
+        if (d_ === 1) return `còn 1 ngày ${h}g`;
+        if (h > 0)   return `còn ${h}g ${m}p`;
+        if (m > 0)   return `còn ${m}p ${s}s`;
+        return `còn ${s}s`;
+      }
+
+      function tick() {
+        const diff = deadline - new Date();
+        const text = fmt(diff);
+        if (!text) {
+          badge.innerHTML = '<span class="badge bg-warning text-dark ms-1" style="font-size:.65rem;vertical-align:middle;">Hết hạn</span>';
+          return;
+        }
+        badge.innerHTML = `<span class="badge bg-success ms-1" style="font-size:.65rem;vertical-align:middle;"><i class="bi bi-clock me-1"></i>${text}</span>`;
+      }
+
+      tick();
+      setInterval(tick, 1000);
+    })
+    .catch(() => {});
+})();
+</script>
+{% endif %}
+{% block scripts %}{% endblock %}
+
+{% if user and user.role == 'admin' %}
+<!-- Logo upload modal -->
+<div class="modal fade" id="logoUploadModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <form method="post" action="/admin/upload-logo" enctype="multipart/form-data">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h6 class="modal-title fw-bold"><i class="bi bi-image me-2 text-primary"></i>Đổi logo hệ thống</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small mb-3">Khuyến nghị: ảnh vuông, tối thiểu 64×64px, PNG hoặc SVG.</p>
+          <input type="file" name="logo" id="logoFileInput" class="form-control form-control-sm"
+                 accept="image/*" required>
+          <div class="mt-3 text-center d-none" id="logoPreviewWrap">
+            <img id="logoPreview" style="max-height:80px;max-width:100%;border-radius:8px;border:1px solid #dee2e6;">
+            <div class="text-muted small mt-1">Xem trước</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Hủy</button>
+          <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-upload me-1"></i>Cập nhật logo</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+document.getElementById('logoFileInput').addEventListener('change', function () {
+  const file = this.files[0];
+  if (!file) return;
+  const wrap = document.getElementById('logoPreviewWrap');
+  const img  = document.getElementById('logoPreview');
+  const reader = new FileReader();
+  reader.onload = e => { img.src = e.target.result; wrap.classList.remove('d-none'); };
+  reader.readAsDataURL(file);
+});
+</script>
+{% endif %}
+
+<script>
+// Hiển thị logo nếu đã upload, fallback icon mặc định nếu chưa có
+(function () {
+  const img  = document.getElementById('siteLogo');
+  const icon = document.getElementById('siteLogoIcon');
+  if (!img || !icon) return;
+  img.onload  = () => { img.style.display = 'inline-block'; icon.style.display = 'none'; };
+  img.onerror = () => { img.style.display = 'none'; icon.style.display = ''; };
+  img.src = '/static/logo.png?t=' + Date.now();
+})();
+</script>
+</body>
+</html>

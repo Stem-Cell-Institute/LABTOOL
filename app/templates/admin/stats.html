@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}Thống kê hệ thống{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="mb-0 fw-bold"><i class="bi bi-bar-chart-fill text-primary me-2"></i>Thống kê hệ thống</h4>
+  <small class="text-muted"><i class="bi bi-clock me-1"></i>Dữ liệu thực tế từ DB</small>
+</div>
+
+<!-- Tổng quan -->
+<div class="row g-3 mb-4">
+  {% set cards = [
+    ("bi-people-fill",     "info",    total_users,    "Người dùng"),
+    ("bi-collection-fill", "primary", total_groups,   "Nhóm nghiên cứu"),
+    ("bi-camera-video-fill","success",total_videos,   "Video"),
+    ("bi-journal-check",   "warning", total_logs,     "Nhật ký AI"),
+    ("bi-chat-dots-fill",  "secondary",total_comments,"Bình luận"),
+  ] %}
+  {% for icon, color, val, label in cards %}
+  <div class="col-6 col-md-4 col-lg-2">
+    <div class="card border-0 shadow-sm text-center h-100">
+      <div class="card-body py-3">
+        <i class="bi {{ icon }} text-{{ color }}" style="font-size:1.8rem;"></i>
+        <div class="fs-3 fw-bold mt-1">{{ val }}</div>
+        <div class="text-muted small">{{ label }}</div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+  <div class="col-6 col-md-4 col-lg-2">
+    <div class="card border-0 shadow-sm text-center h-100">
+      <div class="card-body py-3">
+        <i class="bi bi-hdd-fill text-dark" style="font-size:1.8rem;"></i>
+        <div class="fs-3 fw-bold mt-1">{{ "%.1f"|format(total_storage_mb) }}</div>
+        <div class="text-muted small">MB lưu trữ</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4 mb-4">
+  <!-- Trạng thái video -->
+  <div class="col-md-4">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-white border-0 pt-3 pb-0">
+        <h6 class="fw-bold mb-0"><i class="bi bi-pie-chart me-2 text-primary"></i>Trạng thái video</h6>
+      </div>
+      <div class="card-body">
+        {% set status_display = [
+          ("done",       "success", "bi-check-circle",    "Phân tích xong"),
+          ("failed",     "danger",  "bi-x-circle",        "Lỗi"),
+          ("processing", "warning", "bi-hourglass-split", "Đang xử lý"),
+          ("pending",    "secondary","bi-clock",          "Chờ xử lý"),
+        ] %}
+        {% for key, color, icon, label in status_display %}
+        {% set count = status_counts.get(key, 0) %}
+        {% if total_videos > 0 %}
+        {% set pct = (count / total_videos * 100)|int %}
+        {% else %}
+        {% set pct = 0 %}
+        {% endif %}
+        <div class="mb-3">
+          <div class="d-flex justify-content-between mb-1">
+            <span class="small"><i class="bi {{ icon }} text-{{ color }} me-1"></i>{{ label }}</span>
+            <span class="fw-bold small">{{ count }}</span>
+          </div>
+          <div class="progress" style="height:6px;">
+            <div class="progress-bar bg-{{ color }}" style="width:{{ pct }}%"></div>
+          </div>
+        </div>
+        {% endfor %}
+        {% if status_counts.get('failed', 0) > 0 %}
+        <a href="/admin/issues" class="btn btn-sm btn-outline-danger mt-2 w-100">
+          <i class="bi bi-exclamation-triangle me-1"></i>Xem {{ status_counts.get('failed', 0) }} video lỗi
+        </a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Hoạt động gần đây -->
+  <div class="col-md-8">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-white border-0 pt-3 pb-0 d-flex justify-content-between">
+        <h6 class="fw-bold mb-0"><i class="bi bi-activity me-2 text-primary"></i>Hoạt động gần đây</h6>
+        <a href="/admin/activity" class="btn btn-sm btn-outline-secondary">Xem tất cả</a>
+      </div>
+      <div class="card-body p-0">
+        {% if recent %}
+        <div class="list-group list-group-flush">
+          {% for entry in recent %}
+          {% set meta = action_meta.get(entry.action, ("bi-circle", "secondary", entry.action)) %}
+          <div class="list-group-item border-0 px-3 py-2">
+            <div class="d-flex align-items-center gap-2">
+              <span class="badge bg-{{ meta[1] }} rounded-pill px-2 py-1" style="font-size:0.65rem;">
+                <i class="bi {{ meta[0] }}"></i>
+              </span>
+              <span class="small flex-grow-1">{{ entry.description }}</span>
+              <span class="text-muted" style="font-size:0.75rem; white-space:nowrap;">{{ entry.created_at.strftime('%d/%m %H:%M') }}</span>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-center text-muted py-4 mb-0">Chưa có hoạt động nào được ghi lại</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Thống kê theo nhóm -->
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-white border-0 pt-3 pb-0">
+    <h6 class="fw-bold mb-0"><i class="bi bi-people me-2 text-primary"></i>Chi tiết theo nhóm nghiên cứu</h6>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Nhóm</th>
+            <th>Thành viên</th>
+            <th>Video</th>
+            <th>Nhật ký</th>
+            <th>Dung lượng</th>
+            <th>Thao tác</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for gs in group_stats %}
+          <tr>
+            <td><strong>{{ gs.group.name }}</strong>
+              {% if gs.group.description %}<div class="text-muted small">{{ gs.group.description }}</div>{% endif %}
+            </td>
+            <td><span class="badge bg-info text-dark">{{ gs.members }}</span></td>
+            <td>{{ gs.videos }}</td>
+            <td>{{ gs.logs }}</td>
+            <td>{{ "%.1f"|format(gs.storage_mb) }} MB</td>
+            <td>
+              <a href="/videos?group_id={{ gs.group.id }}" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-camera-video me-1"></i>Video
+              </a>
+              <a href="/logs?group_id={{ gs.group.id }}" class="btn btn-sm btn-outline-secondary ms-1">
+                <i class="bi bi-journal-text me-1"></i>Nhật ký
+              </a>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="text-center text-muted py-3">Chưa có nhóm nào</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}{{ notebook.topic_name }}{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center gap-3 mb-4">
+  <a href="/notebooks" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i></a>
+  <h4 class="mb-0 fw-bold"><i class="bi bi-journal-bookmark-fill me-2" style="color:#c2410c;"></i>{{ notebook.topic_name }}</h4>
+  {% if can_edit %}
+  <a href="/notebooks/{{ notebook.id }}/edit" class="btn btn-outline-warning btn-sm ms-auto"><i class="bi bi-pencil me-1"></i>Sửa thông tin</a>
+  {% endif %}
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-8">
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white border-0 pt-3 pb-0 d-flex justify-content-between align-items-center">
+        <h6 class="fw-bold mb-0"><i class="bi bi-journal-text me-2 text-success"></i>Nhật ký trong sổ tay này ({{ logs|length }})</h6>
+        {% if is_owner %}
+        <a href="/diary/new?attach_to=notebook:{{ notebook.id }}" class="btn btn-sm btn-success">
+          <i class="bi bi-journal-plus me-1"></i>Ghi nhật ký mới
+        </a>
+        {% endif %}
+      </div>
+      <div class="card-body p-0">
+        {% if logs %}
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr><th>Tiêu đề</th><th>Tạo lúc</th><th></th></tr>
+            </thead>
+            <tbody>
+              {% for e in logs %}
+              <tr>
+                <td>{{ e.title or ('Nhật ký #' ~ e.id) }}</td>
+                <td class="text-muted small">{{ e.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                <td><a href="/diary/{{ e.id }}" class="btn btn-sm btn-outline-secondary">Xem</a></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5 text-muted">
+          <i class="bi bi-journal" style="font-size:2.5rem;opacity:.3;"></i>
+          {% if is_owner %}
+          <p class="mt-2 mb-0">Chưa có nhật ký nào gắn với sổ tay này.<br>
+          <a href="/diary/new?attach_to=notebook:{{ notebook.id }}">Ghi nhật ký đầu tiên</a>.</p>
+          {% else %}
+          <p class="mt-2 mb-0">Chưa có nhật ký nào gắn với sổ tay này.</p>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-white border-0 pt-3 pb-0">
+        <h6 class="fw-bold mb-0"><i class="bi bi-card-list me-2" style="color:#c2410c;"></i>Thông tin chung</h6>
+      </div>
+      <div class="card-body">
+        {% set gi = notebook %}
+        {% include "_general_info_display.html" %}
+      </div>
+    </div>
+
+    {% if can_edit %}
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <form method="post" action="/notebooks/{{ notebook.id }}/delete"
+              onsubmit="return confirm('Xoá vĩnh viễn sổ tay {{ notebook.topic_name }}? Nhật ký đã gắn sẽ được giữ lại nhưng không còn thuộc sổ tay nào.')">
+          <button type="submit" class="btn btn-outline-danger btn-sm w-100"><i class="bi bi-trash3 me-1"></i>Xoá sổ tay</button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

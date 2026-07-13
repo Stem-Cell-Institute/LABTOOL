@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block title %}Báo cáo tháng {{ year }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0 fw-bold"><i class="bi bi-calendar3 text-primary me-2"></i>Báo cáo tháng — Năm {{ year }}</h4>
+  <div class="d-flex gap-2">
+    <a href="/admin/reports?year={{ year - 1 }}{% if selected_group %}&group_id={{ selected_group }}{% endif %}"
+       class="btn btn-outline-secondary btn-sm"><i class="bi bi-chevron-left"></i> {{ year - 1 }}</a>
+    <span class="btn btn-primary btn-sm disabled">{{ year }}</span>
+    {% if year < current_year + 1 %}
+    <a href="/admin/reports?year={{ year + 1 }}{% if selected_group %}&group_id={{ selected_group }}{% endif %}"
+       class="btn btn-outline-secondary btn-sm">{{ year + 1 }} <i class="bi bi-chevron-right"></i></a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Filter -->
+<div class="card border-0 shadow-sm mb-3">
+  <div class="card-body py-2">
+    <form method="get" action="/admin/reports" class="row g-2 align-items-end">
+      <input type="hidden" name="year" value="{{ year }}">
+      <div class="col-md-4">
+        <label class="form-label small fw-semibold mb-1">Nhóm nghiên cứu</label>
+        <select name="group_id" class="form-select form-select-sm" onchange="this.form.submit()">
+          <option value="">Tất cả nhóm</option>
+          {% for g in groups %}
+          <option value="{{ g.id }}" {% if selected_group == g.id %}selected{% endif %}>{{ g.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold mb-1">Năm</label>
+        <select name="year" class="form-select form-select-sm" onchange="this.form.submit()">
+          {% for y in year_range %}
+          <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search me-1"></i>Lọc</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Chú thích -->
+<div class="d-flex gap-3 mb-3 small">
+  <span><span class="badge bg-success"><i class="bi bi-check-lg"></i></span> Đã nộp</span>
+  <span><span class="badge bg-danger"><i class="bi bi-x-lg"></i></span> Chưa nộp</span>
+  <span><span class="badge bg-warning text-dark">2</span> Nhiều video</span>
+  <span class="text-muted">— Click ô để xem chi tiết tháng đó</span>
+</div>
+
+<!-- Ma trận báo cáo -->
+<div class="card border-0 shadow-sm">
+  <div class="card-body p-0">
+    {% if users %}
+    <div class="table-responsive">
+      <table class="table table-bordered table-sm align-middle mb-0" style="min-width: 900px;">
+        <thead class="table-dark">
+          <tr>
+            <th style="min-width:180px;" class="sticky-col">Nghiên cứu viên</th>
+            {% for m in range(1, 13) %}
+            <th class="text-center px-1" style="min-width:60px;">
+              <a href="/admin/reports/month?year={{ year }}&month={{ m }}{% if selected_group %}&group_id={{ selected_group }}{% endif %}"
+                 class="text-white text-decoration-none small">
+                T{{ m }}
+                {% if m == current_month and year == current_year %}
+                <span class="badge bg-warning text-dark" style="font-size:0.55rem;">now</span>
+                {% endif %}
+              </a>
+            </th>
+            {% endfor %}
+            <th class="text-center" style="min-width:60px;">Tổng</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set current_group = namespace(id=-1) %}
+          {% for u in users %}
+
+          {# Group header row #}
+          {% if u.group_id != current_group.id %}
+          {% set current_group.id = u.group_id %}
+          <tr class="table-secondary">
+            <td colspan="14" class="fw-semibold py-1 ps-3 small">
+              <i class="bi bi-people-fill me-2 text-primary"></i>
+              {% if u.group %}{{ u.group.name }}{% else %}Chưa có nhóm{% endif %}
+            </td>
+          </tr>
+          {% endif %}
+
+          {# User row #}
+          {% set user_total = namespace(count=0) %}
+          <tr>
+            <td class="sticky-col">
+              <div class="fw-semibold small">{{ u.full_name or u.username }}</div>
+              {% if u.full_name %}<div class="text-muted" style="font-size:0.75rem;">@{{ u.username }}</div>{% endif %}
+            </td>
+            {% for m in range(1, 13) %}
+            {% set cell_videos = matrix[u.id][m] %}
+            {% set user_total.count = user_total.count + cell_videos|length %}
+            <td class="text-center p-1">
+              {% if cell_videos %}
+                {% if cell_videos|length == 1 %}
+                <a href="/videos/{{ cell_videos[0].id }}"
+                   class="badge bg-success text-decoration-none"
+                   title="{{ cell_videos[0].original_name }}">
+                  <i class="bi bi-check-lg"></i>
+                </a>
+                {% else %}
+                <a href="/admin/reports/month?year={{ year }}&month={{ m }}&group_id={{ u.group_id or '' }}"
+                   class="badge bg-warning text-dark text-decoration-none"
+                   title="{{ cell_videos|length }} video">
+                  {{ cell_videos|length }}
+                </a>
+                {% endif %}
+              {% else %}
+                {% if m <= current_month or year < current_year %}
+                <span class="badge bg-danger bg-opacity-15 text-danger" style="font-size:0.6rem;">
+                  <i class="bi bi-x-lg"></i>
+                </span>
+                {% else %}
+                <span class="text-muted small">—</span>
+                {% endif %}
+              {% endif %}
+            </td>
+            {% endfor %}
+            <td class="text-center fw-bold">
+              {% if user_total.count > 0 %}
+              <span class="badge bg-primary">{{ user_total.count }}</span>
+              {% else %}
+              <span class="text-muted">0</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+
+          {# Summary row #}
+          <tr class="table-light fw-semibold">
+            <td class="small">Tổng số video</td>
+            {% set grand_total = namespace(count=0) %}
+            {% for m in range(1, 13) %}
+            {% set grand_total.count = grand_total.count + month_totals[m] %}
+            <td class="text-center">
+              {% if month_totals[m] > 0 %}
+              <a href="/admin/reports/month?year={{ year }}&month={{ m }}{% if selected_group %}&group_id={{ selected_group }}{% endif %}"
+                 class="badge bg-primary text-decoration-none">{{ month_totals[m] }}</a>
+              {% else %}
+              <span class="text-muted small">0</span>
+              {% endif %}
+            </td>
+            {% endfor %}
+            <td class="text-center"><span class="badge bg-dark">{{ grand_total.count }}</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-people" style="font-size:3rem; opacity:0.3;"></i>
+      <p class="mt-2">Chưa có người dùng nào.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<style>
+.sticky-col { position: sticky; left: 0; background: white; z-index: 1; border-right: 2px solid #dee2e6 !important; }
+thead .sticky-col { background: #212529; }
+</style>
+{% endblock %}

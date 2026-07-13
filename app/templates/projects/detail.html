@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}{{ project.name }}{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center gap-3 mb-2">
+  <a href="{% if project.parent %}/projects/{{ project.parent.id }}{% else %}/projects{% endif %}"
+     class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i></a>
+  <h4 class="mb-0 fw-bold">
+    <i class="bi bi-kanban-fill me-2" style="color:#c2410c;"></i>{{ project.name }}
+    {% if project.owner_id == user.id %}<span class="badge ms-2" style="background:#ffedd5;color:#c2410c;">Quản lý Project</span>{% endif %}
+  </h4>
+  {% if can_manage_project %}
+  <a href="/projects/{{ project.id }}/edit" class="btn btn-outline-warning btn-sm ms-auto"><i class="bi bi-pencil me-1"></i>Sửa thông tin</a>
+  {% endif %}
+</div>
+{% if project.parent %}
+<div class="mb-4 small text-muted">
+  <i class="bi bi-diagram-3 me-1"></i>Đề tài nhánh thuộc:
+  <a href="/projects/{{ project.parent.id }}" class="text-decoration-none fw-semibold">{{ project.parent.full_path_name }}</a>
+</div>
+{% else %}
+<div class="mb-4"></div>
+{% endif %}
+
+<div class="row g-4">
+  <div class="col-lg-8">
+
+    {% if project.description %}
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body py-3">
+        <div class="text-muted small">{{ project.description }}</div>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white border-0 pt-3 pb-0 d-flex justify-content-between align-items-center">
+        <h6 class="fw-bold mb-0"><i class="bi bi-diagram-3-fill me-2" style="color:#c2410c;"></i>Đề tài nhánh ({{ sub_projects|length }})</h6>
+        {% if can_create_sub %}
+        <a href="/projects/{{ project.id }}/sub-projects/new" class="btn btn-sm" style="border:1px solid #c2410c;color:#c2410c;">
+          <i class="bi bi-plus-lg me-1"></i>Tạo đề tài nhánh
+        </a>
+        {% endif %}
+      </div>
+      <div class="card-body p-0">
+        {% if sub_projects %}
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr><th>Tên đề tài nhánh</th><th>Người phụ trách</th><th>Thành viên</th><th></th></tr>
+            </thead>
+            <tbody>
+              {% for sp in sub_projects %}
+              <tr>
+                <td>{{ sp.name }}</td>
+                <td>{{ sp.owner.full_name or sp.owner.username }}</td>
+                <td class="text-muted small">{{ sp.members|length }}</td>
+                <td><a href="/projects/{{ sp.id }}" class="btn btn-sm btn-outline-secondary">Xem</a></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="text-center py-4 text-muted">
+          <p class="mb-0 small">Chưa có đề tài nhánh nào.</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white border-0 pt-3 pb-0 d-flex justify-content-between align-items-center">
+        <h6 class="fw-bold mb-0"><i class="bi bi-journal-text me-2 text-success"></i>Nhật ký thí nghiệm của project ({{ logs|length }})</h6>
+        {% if can_log_here %}
+        <a href="/diary/new?attach_to=project:{{ project.id }}" class="btn btn-sm btn-success">
+          <i class="bi bi-journal-plus me-1"></i>Ghi nhật ký mới
+        </a>
+        {% endif %}
+      </div>
+      <div class="card-body p-0">
+        {% if logs %}
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr><th>Nghiên cứu viên</th><th>Tiêu đề</th><th>Tạo lúc</th><th></th></tr>
+            </thead>
+            <tbody>
+              {% for e in logs %}
+              <tr>
+                <td>{{ e.author.full_name or e.author.username }}</td>
+                <td>{{ e.title or ('Nhật ký #' ~ e.id) }}</td>
+                <td class="text-muted small">{{ e.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                <td><a href="/diary/{{ e.id }}" class="btn btn-sm btn-outline-secondary">Xem</a></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5 text-muted">
+          <i class="bi bi-journal" style="font-size:2.5rem;opacity:.3;"></i>
+          {% if can_log_here %}
+          <p class="mt-2 mb-0">Chưa có nhật ký nào gắn với project này.<br>
+          <a href="/diary/new?attach_to=project:{{ project.id }}">Ghi nhật ký đầu tiên</a>.</p>
+          {% else %}
+          <p class="mt-2 mb-0">Chưa có nhật ký nào gắn với project này.</p>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-white border-0 pt-3 pb-0">
+        <h6 class="fw-bold mb-0"><i class="bi bi-card-list me-2" style="color:#c2410c;"></i>Thông tin chung</h6>
+      </div>
+      <div class="card-body">
+        {% set gi = project %}
+        {% include "_general_info_display.html" %}
+      </div>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-white border-0 pt-3 pb-0">
+        <h6 class="fw-bold mb-0"><i class="bi bi-people me-2" style="color:#c2410c;"></i>Thành viên ({{ members|length }})</h6>
+      </div>
+      <div class="card-body">
+        <div class="vstack gap-2">
+          {% for m in members %}
+          <div class="d-flex justify-content-between align-items-center">
+            <div class="small">
+              {{ m.user.full_name or m.user.username }}
+              {% if m.user_id == project.owner_id %}<span class="badge bg-light text-dark border ms-1" style="font-size:.65rem;">quản lý project</span>{% endif %}
+            </div>
+            {% if can_manage_project and m.user_id != project.owner_id %}
+            <form method="post" action="/projects/{{ project.id }}/remove-member/{{ m.user_id }}"
+                  onsubmit="return confirm('Xoá {{ m.user.full_name or m.user.username }} khỏi project?')">
+              <button type="submit" class="btn btn-link btn-sm p-0 text-danger"><i class="bi bi-x-lg"></i></button>
+            </form>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+
+        {% if can_manage_project %}
+        <hr>
+        <form method="post" action="/projects/{{ project.id }}/add-member" class="d-flex gap-2">
+          <input type="text" name="username" class="form-control form-control-sm" placeholder="Username thành viên" required>
+          <button type="submit" class="btn btn-sm" style="background:#c2410c;color:#fff;">Thêm</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+      <div class="card-body d-flex flex-column gap-2">
+        {% if project.owner_id != user.id %}
+        <form method="post" action="/projects/{{ project.id }}/leave"
+              onsubmit="return confirm('Rời khỏi project này?')">
+          <button type="submit" class="btn btn-outline-secondary btn-sm w-100"><i class="bi bi-box-arrow-left me-1"></i>Rời project</button>
+        </form>
+        {% endif %}
+        {% if can_manage_project %}
+        <form method="post" action="/projects/{{ project.id }}/delete"
+              onsubmit="return confirm('Xoá vĩnh viễn project {{ project.name }}? Nhật ký đã gắn sẽ được giữ lại nhưng không còn thuộc project nào.')">
+          <button type="submit" class="btn btn-outline-danger btn-sm w-100"><i class="bi bi-trash3 me-1"></i>Xoá project</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

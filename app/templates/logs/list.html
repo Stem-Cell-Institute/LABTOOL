@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Nhật ký Video{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="mb-0 fw-bold"><i class="bi bi-journal-text text-primary me-2"></i>Nhật ký Video</h4>
+  <a href="/videos/upload" class="btn btn-primary">
+    <i class="bi bi-upload me-1"></i>Upload video mới
+  </a>
+</div>
+
+<!-- Search & filter -->
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-body">
+    <form method="get" action="/logs" class="row g-2 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label small fw-semibold mb-1">Từ khóa</label>
+        <input type="text" name="q" class="form-control" placeholder="Tìm hóa chất, tên thí nghiệm..." value="{{ q }}">
+      </div>
+      {% if user.role == 'admin' and groups %}
+      <div class="col-md-3">
+        <label class="form-label small fw-semibold mb-1">Nhóm</label>
+        <select name="group_id" class="form-select">
+          <option value="">Tất cả nhóm</option>
+          {% for g in groups %}
+          <option value="{{ g.id }}" {% if selected_group == g.id %}selected{% endif %}>{{ g.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold mb-1">Từ ngày</label>
+        <input type="date" name="from_date" class="form-control" value="{{ from_date }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small fw-semibold mb-1">Đến ngày</label>
+        <input type="date" name="to_date" class="form-control" value="{{ to_date }}">
+      </div>
+      <div class="col-md-1">
+        <button type="submit" class="btn btn-primary w-100"><i class="bi bi-search"></i></button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if q or from_date or to_date %}
+<p class="text-muted small mb-2">Tìm thấy <strong>{{ logs|length }}</strong> nhật ký
+  {% if q %}khớp với "<strong>{{ q }}</strong>"{% endif %}
+  <a href="/logs" class="ms-2 text-decoration-none"><i class="bi bi-x-circle"></i> Xóa bộ lọc</a>
+</p>
+{% endif %}
+
+<div class="row g-3">
+  {% for log in logs %}
+  <div class="col-md-6 col-lg-4">
+    <div class="card border-0 shadow-sm h-100 log-card">
+      <div class="card-body">
+        <h6 class="fw-bold mb-1">
+          <a href="/logs/{{ log.id }}" class="text-dark text-decoration-none">{{ log.title or log.video.original_name }}</a>
+        </h6>
+        <p class="text-muted small mb-2">
+          <i class="bi bi-people me-1"></i>{{ log.video.group.name }} &nbsp;|&nbsp;
+          <i class="bi bi-calendar3 me-1"></i>{{ log.created_at.strftime('%d/%m/%Y') }}
+        </p>
+        <p class="small text-muted mb-3" style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">
+          {{ log.content[:250] }}
+        </p>
+        <div class="d-flex gap-2 mt-auto">
+          <a href="/logs/{{ log.id }}" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-eye me-1"></i>Xem
+          </a>
+          <a href="/logs/{{ log.id }}/export/md" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-markdown"></i>
+          </a>
+          <a href="/logs/{{ log.id }}/export/pdf" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-file-pdf"></i>
+          </a>
+          {% if log.comments %}
+          <span class="ms-auto text-muted small align-self-center">
+            <i class="bi bi-chat me-1"></i>{{ log.comments|length }}
+          </span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="col-12">
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-journal" style="font-size:3rem; opacity:0.3;"></i>
+      <p class="mt-2">Chưa có nhật ký nào{% if q %} khớp với tìm kiếm{% endif %}.</p>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

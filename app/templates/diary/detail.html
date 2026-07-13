@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% block title %}{{ entry.title or 'Nhật ký #' ~ entry.id }}{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center gap-3 mb-4">
+  <a href="{{ back_url }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i></a>
+  <h4 class="mb-0 fw-bold">
+    <i class="bi bi-journal-text text-success me-2"></i>
+    {{ entry.title or 'Nhật ký #' ~ entry.id }}
+    {% if show_author %}<span class="text-muted fs-6">— {{ entry.author.full_name or entry.author.username }}</span>{% endif %}
+  </h4>
+  {% if not locked and can_edit %}
+  <a href="/diary/{{ entry.id }}/edit" class="btn btn-outline-warning btn-sm ms-auto">
+    <i class="bi bi-pencil me-1"></i>Chỉnh sửa
+  </a>
+  {% endif %}
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-8">
+
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body py-2">
+        <div class="d-flex flex-wrap gap-3 small align-items-center">
+          {% if entry.group %}<span><i class="bi bi-people me-1 text-muted"></i>{{ entry.group.name }}</span>{% endif %}
+          {% if entry.project %}
+          <a href="/projects/{{ entry.project.id }}" class="badge text-decoration-none" style="background:#ffedd5;color:#c2410c;">
+            <i class="bi bi-kanban me-1"></i>{{ entry.project.full_path_name }}
+          </a>
+          {% endif %}
+          {% if entry.notebook %}
+          <a href="/notebooks/{{ entry.notebook.id }}" class="badge text-decoration-none" style="background:#ffedd5;color:#c2410c;">
+            <i class="bi bi-journal-bookmark me-1"></i>{{ entry.notebook.topic_name }}
+          </a>
+          {% endif %}
+          <span><i class="bi bi-clock-history me-1 text-muted"></i>Tạo lúc {{ entry.created_at.strftime('%d/%m/%Y %H:%M') }}</span>
+          {% if entry.updated_at and entry.updated_at != entry.created_at %}
+          <span>
+            <i class="bi bi-pencil me-1 text-muted"></i>Sửa lần cuối {{ entry.updated_at.strftime('%d/%m/%Y %H:%M') }}
+            {% if entry.last_editor %}bởi <strong>{{ entry.last_editor.full_name or entry.last_editor.username }}</strong>{% if entry.updated_by != entry.user_id %} <span class="badge bg-warning text-dark">quản lý</span>{% endif %}{% endif %}
+          </span>
+          {% endif %}
+          {% if locked %}
+            <span class="badge bg-secondary"><i class="bi bi-lock-fill me-1"></i>Đã khoá vĩnh viễn</span>
+          {% else %}
+            <span class="badge bg-success"><i class="bi bi-unlock-fill me-1"></i>Còn sửa được đến {{ unlock_at.strftime('%d/%m/%Y %H:%M') }}</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white border-0 pt-3 pb-0">
+        <h6 class="fw-bold mb-0"><i class="bi bi-file-text me-2 text-primary"></i>Nội dung nhật ký</h6>
+      </div>
+      <div class="card-body log-content">
+        {{ content_html|safe if content_html else '<p class="text-muted">Chưa có nội dung.</p>' }}
+      </div>
+    </div>
+
+    {% if files_view %}
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white border-0 pt-3 pb-0">
+        <h6 class="fw-bold mb-0"><i class="bi bi-paperclip me-2 text-primary"></i>Tệp đính kèm ({{ files_view|length }})</h6>
+      </div>
+      <div class="card-body">
+        <div class="row g-3">
+          {% for item in files_view %}
+          {% set f = item.f %}
+          {% set url = '/uploads/diary/' ~ entry.user_id ~ '/' ~ entry.id ~ '/' ~ f.original_name %}
+          <div class="col-md-6">
+
+            {% set cat_badge = '<span class="badge bg-secondary" style="font-size:.65rem;">thô</span>' if f.category == 'raw' else ('<span class="badge bg-info text-dark" style="font-size:.65rem;">đã xử lý</span>' if f.category == 'processed' else '') %}
+
+            {% if item.preview == 'image' %}
+            <div class="text-center border rounded-3 p-2">
+              <img src="{{ url }}" class="img-fluid rounded" style="max-height:200px;" alt="{{ f.original_name }}">
+              <div class="small text-muted mt-1">{{ f.original_name }} {{ cat_badge|safe }}</div>
+            </div>
+
+            {% elif item.preview == 'pdf' %}
+            <div class="border rounded-3 overflow-hidden">
+              <iframe src="{{ url }}" style="width:100%;height:260px;border:0;" title="{{ f.original_name }}"></iframe>
+              <div class="d-flex justify-content-between align-items-center small px-2 py-1 bg-light">
+                <span class="text-truncate">{{ f.original_name }} {{ cat_badge|safe }}</span>
+                <a href="{{ url }}" target="_blank" class="text-nowrap ms-2"><i class="bi bi-arrows-fullscreen me-1"></i>Mở rộng</a>
+              </div>
+            </div>
+
+            {% elif item.preview == 'text' %}
+            <div class="border rounded-3 overflow-hidden">
+              <iframe src="{{ url }}" style="width:100%;height:180px;border:0;background:#fff;" title="{{ f.original_name }}"></iframe>
+              <div class="d-flex justify-content-between align-items-center small px-2 py-1 bg-light">
+                <span class="text-truncate">{{ f.original_name }} {{ cat_badge|safe }}</span>
+                <a href="{{ url }}" target="_blank" class="text-nowrap ms-2"><i class="bi bi-arrows-fullscreen me-1"></i>Mở rộng</a>
+              </div>
+            </div>
+
+            {% else %}
+            <a href="{{ url }}" target="_blank"
+               class="card border text-decoration-none d-flex flex-row align-items-center gap-3 p-3">
+              {% if f.file_type == 'pdf' %}<i class="bi bi-file-pdf fs-3 text-danger"></i>
+              {% elif '.doc' in f.original_name.lower() %}<i class="bi bi-file-word fs-3 text-primary"></i>
+              {% elif '.xls' in f.original_name.lower() %}<i class="bi bi-file-excel fs-3 text-success"></i>
+              {% elif '.csv' in f.original_name.lower() %}<i class="bi bi-filetype-csv fs-3 text-success"></i>
+              {% else %}<i class="bi bi-file-earmark fs-3 text-secondary"></i>{% endif %}
+              <div>
+                <div class="fw-semibold small">{{ f.original_name }} {{ cat_badge|safe }}</div>
+                <div class="text-muted" style="font-size:.75rem;">{{ "%.1f"|format(f.file_size/1024) }} KB — nhấn để tải về</div>
+              </div>
+            </a>
+            {% endif %}
+
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if revisions %}
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white border-0 pt-3 pb-0">
+        <h6 class="fw-bold mb-0"><i class="bi bi-clock-history me-2 text-primary"></i>Lịch sử chỉnh sửa ({{ revisions|length }})</h6>
+      </div>
+      <div class="card-body">
+        <div class="accordion" id="revisionAccordion">
+          {% for item in revisions %}
+          {% set rev = item.rev %}
+          <div class="accordion-item">
+            <h2 class="accordion-header">
+              <button class="accordion-button collapsed py-2" type="button" data-bs-toggle="collapse" data-bs-target="#rev{{ rev.id }}">
+                <span class="small">
+                  <i class="bi bi-person-circle me-1"></i>
+                  <strong>{{ rev.editor.full_name or rev.editor.username }}</strong>
+                  {% if rev.edited_by != entry.user_id %}<span class="badge bg-warning text-dark ms-1">quản lý</span>{% endif %}
+                  đã sửa lúc {{ rev.edited_at.strftime('%d/%m/%Y %H:%M') }}
+                  {% if item.title_changed %}<span class="badge bg-info text-dark ms-1">đổi tiêu đề</span>{% endif %}
+                </span>
+              </button>
+            </h2>
+            <div id="rev{{ rev.id }}" class="accordion-collapse collapse" data-bs-parent="#revisionAccordion">
+              <div class="accordion-body py-2">
+                {% if item.title_changed %}
+                <div class="small mb-2">
+                  <span class="text-muted">Tiêu đề:</span>
+                  <span class="text-danger text-decoration-line-through">{{ rev.prev_title or '(trống)' }}</span>
+                  →
+                  <span class="text-success">{{ rev.new_title or '(trống)' }}</span>
+                </div>
+                {% endif %}
+                {% if item.diff %}
+                <pre class="small mb-0 p-2 border rounded" style="white-space:pre-wrap;background:#f8f9fa;">{% for kind, text in item.diff %}{% if kind == 'add' %}<span class="bg-success bg-opacity-25 text-success-emphasis d-block">+ {{ text }}</span>{% elif kind == 'remove' %}<span class="bg-danger bg-opacity-25 text-danger-emphasis d-block text-decoration-line-through">- {{ text }}</span>{% elif kind == 'hunk' %}<span class="text-muted d-block">{{ text }}</span>{% else %}<span class="text-muted d-block">  {{ text }}</span>{% endif %}{% endfor %}</pre>
+                {% else %}
+                <p class="small text-muted mb-0">Không thay đổi nội dung (chỉ đổi tiêu đề hoặc file đính kèm).</p>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body py-3">
+        {% if locked %}
+        <div class="alert alert-secondary mb-0 py-2 small">
+          <i class="bi bi-shield-lock me-1"></i>
+          Nhật ký này đã khoá vĩnh viễn để đảm bảo tính liêm chính khoa học — không ai (kể cả admin) có thể sửa hay xoá nữa.
+        </div>
+        {% else %}
+        <div class="alert alert-success mb-0 py-2 small">
+          <i class="bi bi-unlock me-1"></i>
+          Còn <strong>{{ days_remaining }}</strong> ngày để chỉnh sửa
+          (hạn: {{ unlock_at.strftime('%d/%m/%Y %H:%M') }}).
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

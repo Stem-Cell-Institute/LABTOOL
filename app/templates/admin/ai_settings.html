@@ -1,0 +1,275 @@
+{% extends "base.html" %}
+{% block title %}Cài đặt AI — Kết quả Nghiên cứu{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-3 mb-4">
+  <div>
+    <h4 class="fw-bold mb-1"><i class="bi bi-robot me-2 text-success"></i>Cài đặt AI — Kết quả Nghiên cứu</h4>
+    <p class="text-muted small mb-0">Tùy chỉnh cách AI phân tích và chấm điểm báo cáo hằng tháng của nghiên cứu viên.</p>
+  </div>
+</div>
+
+<form method="post" action="/admin/ai-settings">
+
+  <!-- Tabs -->
+  <ul class="nav nav-tabs mb-4" id="settingsTabs">
+    <li class="nav-item">
+      <a class="nav-link active" data-bs-toggle="tab" href="#tab-prompt">
+        <i class="bi bi-chat-left-text me-1"></i>Prompt phân tích
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" data-bs-toggle="tab" href="#tab-model">
+        <i class="bi bi-cpu me-1"></i>Mô hình AI
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link" data-bs-toggle="tab" href="#tab-calibration" id="tab-calibration-link">
+        <i class="bi bi-mortarboard me-1"></i>Ví dụ hiệu chỉnh
+        {% if calibration_examples %}<span class="badge bg-secondary">{{ calibration_examples|length }}</span>{% endif %}
+      </a>
+    </li>
+  </ul>
+
+  <div class="tab-content">
+
+    <!-- ══ Tab 1: Prompt ══════════════════════════════════════════════════ -->
+    <div class="tab-pane fade show active" id="tab-prompt">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-3">
+          <div>
+            <h6 class="fw-bold mb-0">Prompt phân tích báo cáo</h6>
+            <p class="text-muted small mb-0">Nội dung hướng dẫn gửi cho Gemini khi chấm báo cáo. Để trống = dùng prompt mặc định.</p>
+          </div>
+          <button type="submit" class="btn btn-sm btn-outline-secondary"
+                  formaction="/admin/ai-settings/reset-prompt" formmethod="post" formnovalidate
+                  onclick="return confirm('Khôi phục prompt về mặc định?')">
+            <i class="bi bi-arrow-counterclockwise me-1"></i>Reset về mặc định
+          </button>
+        </div>
+        <div class="card-body">
+
+          <!-- Biến hợp lệ -->
+          <div class="alert alert-info py-2 mb-3">
+            <div class="fw-semibold small mb-1"><i class="bi bi-info-circle me-1"></i>Các biến có thể dùng trong prompt:</div>
+            <div class="d-flex flex-wrap gap-2 small">
+              {% for var, desc in [
+                ('[[researcher_name]]',      'Tên nghiên cứu viên'),
+                ('[[month]]',                'Tháng báo cáo'),
+                ('[[year]]',                 'Năm báo cáo'),
+                ('[[current_content]]',      'Nội dung báo cáo tháng này'),
+                ('[[prev_text]]',            'Nội dung các báo cáo tháng trước'),
+                ('[[calibration_examples]]', 'Ví dụ hiệu chỉnh đã duyệt ở tab bên cạnh'),
+                ('[[system_warnings]]',      'Cảnh báo hệ thống tự phát hiện (VD: trùng lặp file minh chứng)'),
+              ] %}
+              <code class="bg-white border rounded px-2 py-1" title="{{ desc }}">{{ var }}</code>
+              {% endfor %}
+            </div>
+          </div>
+
+          <textarea name="results_ai_prompt" id="promptTextarea"
+                    class="form-control font-monospace" rows="22"
+                    placeholder="Để trống để dùng prompt mặc định bên dưới...">{{ cfg.results_ai_prompt }}</textarea>
+
+          <!-- Preview prompt mặc định -->
+          <details class="mt-3">
+            <summary class="text-muted small" style="cursor:pointer;">
+              <i class="bi bi-eye me-1"></i>Xem prompt mặc định
+            </summary>
+            <pre class="mt-2 p-3 bg-light border rounded small" style="white-space:pre-wrap;max-height:300px;overflow-y:auto;">{{ default_prompt }}</pre>
+          </details>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ Tab 2: Mô hình AI ═════════════════════════════════════════════ -->
+    <div class="tab-pane fade" id="tab-model">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-bottom py-3">
+          <h6 class="fw-bold mb-0">Mô hình Gemini</h6>
+          <p class="text-muted small mb-0">Chọn model Gemini dùng để phân tích báo cáo kết quả nghiên cứu.</p>
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            {% for model in gemini_models %}
+            <div class="col-md-6">
+              <label class="d-flex align-items-start gap-3 p-3 border rounded-3
+                            {% if cfg.results_ai_model == model %}border-success bg-success bg-opacity-10{% else %}border-light{% endif %}"
+                     style="cursor:pointer;">
+                <input type="radio" name="results_ai_model" value="{{ model }}"
+                       class="mt-1 flex-shrink-0"
+                       {% if cfg.results_ai_model == model %}checked{% endif %}>
+                <div>
+                  <div class="fw-semibold">{{ model }}</div>
+                  <div class="text-muted small">
+                    {% if 'pro' in model %}Chính xác hơn, chậm hơn và tốn token hơn
+                    {% elif '2.5' in model %}Nhanh, cân bằng — khuyên dùng
+                    {% else %}Nhanh, chi phí thấp{% endif %}
+                  </div>
+                </div>
+              </label>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ Tab 3: Ví dụ hiệu chỉnh ═══════════════════════════════════════ -->
+    <div class="tab-pane fade" id="tab-calibration">
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-header bg-white border-bottom py-3">
+          <h6 class="fw-bold mb-0">Ví dụ hiệu chỉnh từ Ban quản lý</h6>
+          <p class="text-muted small mb-0">
+            Khi Ban quản lý sửa quyết định khác với đề xuất AI, hệ thống tự lưu lại lý do thành ví dụ ở đây.
+            Chỉ ví dụ đang <strong>bật</strong> mới được đưa vào prompt cho các lần chấm điểm sau (tối đa 8 ví dụ gần nhất).
+          </p>
+        </div>
+        <div class="card-body">
+          {% if not calibration_examples %}
+          <p class="text-muted text-center py-3 mb-0">Chưa có ví dụ hiệu chỉnh nào.</p>
+          {% else %}
+          <div class="table-responsive">
+            <table class="table table-sm align-middle">
+              <thead>
+                <tr class="text-muted small">
+                  <th>Bật</th>
+                  <th>Tháng/NCV</th>
+                  <th>AI đề xuất → BQL sửa</th>
+                  <th>Lý do</th>
+                  <th>Nguồn</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for ex in calibration_examples %}
+                <tr class="{% if not ex.is_active %}text-muted{% endif %}">
+                  <td>
+                    <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent"
+                            formaction="/admin/ai-settings/calibration/{{ ex.id }}/toggle" formmethod="post" formnovalidate
+                            title="{{ 'Tắt' if ex.is_active else 'Bật' }}">
+                      {% if ex.is_active %}
+                      <i class="bi bi-toggle2-on text-success fs-5"></i>
+                      {% else %}
+                      <i class="bi bi-toggle2-off fs-5"></i>
+                      {% endif %}
+                    </button>
+                  </td>
+                  <td class="small">
+                    {% if ex.report_month and ex.report_year %}{{ ex.report_month }}/{{ ex.report_year }}<br>{% endif %}
+                    {{ ex.researcher_name or '—' }}
+                  </td>
+                  <td class="small">
+                    {% set av = verdict_label.get(ex.ai_verdict, (ex.ai_verdict or '—', 'secondary')) %}
+                    {% set cv = verdict_label.get(ex.correct_verdict, (ex.correct_verdict or '—', 'secondary')) %}
+                    <span class="badge bg-{{ av[1] }}">{{ av[0] }}</span>
+                    <i class="bi bi-arrow-right mx-1"></i>
+                    <span class="badge bg-{{ cv[1] }}">{{ cv[0] }}</span>
+                  </td>
+                  <td class="small" style="max-width:260px;">{{ ex.reason|truncate(140, true, '…') }}</td>
+                  <td class="small">
+                    {% if ex.source == 'manual' %}
+                    <span class="badge bg-light text-dark border">Thủ công</span>
+                    {% else %}
+                    <span class="badge bg-light text-dark border">Từ báo cáo</span>
+                    {% endif %}
+                  </td>
+                  <td class="text-end">
+                    {% if ex.report_id %}
+                    <a href="/results/{{ ex.report_id }}" target="_blank" class="btn btn-sm btn-outline-secondary py-0 px-1" title="Xem báo cáo gốc">
+                      <i class="bi bi-box-arrow-up-right"></i>
+                    </a>
+                    {% endif %}
+                    <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-1" title="Xoá"
+                            formaction="/admin/ai-settings/calibration/{{ ex.id }}/delete" formmethod="post" formnovalidate
+                            onclick="return confirm('Xoá ví dụ hiệu chỉnh này?')">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-bottom py-3">
+          <h6 class="fw-bold mb-0"><i class="bi bi-plus-circle me-2"></i>Thêm ví dụ thủ công</h6>
+          <p class="text-muted small mb-0">Dùng để dạy AI các tình huống biên chưa từng xảy ra trong dữ liệu thật.</p>
+        </div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Tình huống báo cáo (bối cảnh)</label>
+            <textarea name="context_excerpt" class="form-control form-control-sm" rows="3" required
+                      placeholder="VD: NCV báo cáo đã làm ELISA nhưng chỉ mô tả bằng lời, không kèm số liệu hay hình ảnh..."></textarea>
+          </div>
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold">AI đã/sẽ đề xuất gì (tuỳ chọn)</label>
+              <select name="ai_verdict" class="form-select form-select-sm">
+                <option value="">— Không rõ / không áp dụng —</option>
+                {% for val, (label, color) in verdict_label.items() %}
+                <option value="{{ val }}">{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small fw-semibold">Kết quả đúng phải là</label>
+              <select name="correct_verdict" class="form-select form-select-sm" required>
+                <option value="" disabled selected>— Chọn —</option>
+                {% for val, (label, color) in verdict_label.items() %}
+                <option value="{{ val }}">{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Lý do</label>
+            <textarea name="reason" class="form-control form-control-sm" rows="3" required
+                      placeholder="Giải thích vì sao đây là kết quả đúng..."></textarea>
+          </div>
+          <button type="submit" class="btn btn-outline-success btn-sm"
+                  formaction="/admin/ai-settings/calibration/add" formmethod="post">
+            <i class="bi bi-plus-lg me-1"></i>Thêm ví dụ
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>{# end tab-content #}
+
+  <!-- Save button (floating) -->
+  <div class="d-flex justify-content-end gap-2 mt-4">
+    <a href="/" class="btn btn-outline-secondary">Hủy</a>
+    <button type="submit" class="btn btn-success px-4" formnovalidate>
+      <i class="bi bi-floppy me-1"></i>Lưu cài đặt
+    </button>
+  </div>
+
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* ── Model radio highlight ── */
+document.querySelectorAll('input[name="results_ai_model"]').forEach(radio => {
+  radio.addEventListener('change', () => {
+    document.querySelectorAll('input[name="results_ai_model"]').forEach(r => {
+      r.closest('label').classList.remove('border-success','bg-success','bg-opacity-10');
+      r.closest('label').classList.add('border-light');
+    });
+    radio.closest('label').classList.remove('border-light');
+    radio.closest('label').classList.add('border-success','bg-success','bg-opacity-10');
+  });
+});
+
+/* ── Mở đúng tab khi URL có #tab-calibration (sau khi redirect từ hành động trong tab đó) ── */
+if (window.location.hash === '#tab-calibration') {
+  const link = document.getElementById('tab-calibration-link');
+  if (link) new bootstrap.Tab(link).show();
+}
+</script>
+{% endblock %}

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Sửa project' if project else 'Tạo project mới' }}{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center gap-3 mb-4">
+  <a href="{% if project %}/projects/{{ project.id }}{% else %}/projects{% endif %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i></a>
+  <h4 class="mb-0 fw-bold"><i class="bi bi-kanban-fill me-2" style="color:#c2410c;"></i>{{ 'Sửa thông tin project' if project else 'Tạo project mới' }}</h4>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <form method="post" action="/projects/save">
+          {% if project %}<input type="hidden" name="project_id" value="{{ project.id }}">{% endif %}
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Tên đề tài/dự án <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control" required
+                   value="{{ project.name if project else '' }}"
+                   placeholder="VD: Nghiên cứu đặc tính kháng khuẩn của...">
+          </div>
+          <div class="mb-4">
+            <label class="form-label fw-semibold">Mô tả</label>
+            <textarea name="description" class="form-control" rows="4"
+                      placeholder="Mục tiêu, phạm vi nghiên cứu của project...">{{ project.description if project else '' }}</textarea>
+          </div>
+
+          {% set gi = project %}
+          {% include "_general_info_fields.html" %}
+
+          {% if not project %}
+          <div class="alert alert-light border small mb-4">
+            <i class="bi bi-info-circle me-1"></i>
+            Bạn sẽ tự động là <strong>quản lý Project</strong> và có thể thêm nghiên cứu viên khác vào sau khi tạo.
+            Thành viên trong project xem được nhật ký thí nghiệm của nhau (chỉ xem, không sửa).
+          </div>
+          {% endif %}
+
+          <button type="submit" class="btn" style="background:#c2410c;color:#fff;">
+            <i class="bi bi-check-lg me-1"></i>{{ 'Lưu thay đổi' if project else 'Tạo project' }}
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

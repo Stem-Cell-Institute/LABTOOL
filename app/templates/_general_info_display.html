@@ -1,0 +1,19 @@
+{# Partial dùng chung cho projects/detail.html và notebooks/detail.html — hiển thị Thông tin chung.
+   Biến truyền vào: gi (Project hoặc Notebook) #}
+{% set has_info = gi.topic_code or gi.researcher_name or gi.student_id or gi.class_info or gi.supervisor or gi.co_supervisor or gi.start_date or gi.end_date %}
+{% if has_info %}
+<table class="table table-sm table-borderless mb-0 small">
+  <tbody>
+    {% if gi.topic_code %}<tr><td class="text-muted" style="width:45%;">Mã số đề tài</td><td class="fw-semibold">{{ gi.topic_code }}</td></tr>{% endif %}
+    {% if gi.researcher_name %}<tr><td class="text-muted">Người thực hiện</td><td class="fw-semibold">{{ gi.researcher_name }}</td></tr>{% endif %}
+    {% if gi.student_id %}<tr><td class="text-muted">Mã số SV/HV/NCS</td><td class="fw-semibold">{{ gi.student_id }}</td></tr>{% endif %}
+    {% if gi.class_info %}<tr><td class="text-muted">Lớp/Khóa/Khoa/Viện</td><td class="fw-semibold">{{ gi.class_info }}</td></tr>{% endif %}
+    {% if gi.supervisor %}<tr><td class="text-muted">Người hướng dẫn</td><td class="fw-semibold">{{ gi.supervisor }}</td></tr>{% endif %}
+    {% if gi.co_supervisor %}<tr><td class="text-muted">Đồng hướng dẫn</td><td class="fw-semibold">{{ gi.co_supervisor }}</td></tr>{% endif %}
+    {% if gi.start_date %}<tr><td class="text-muted">Ngày bắt đầu</td><td class="fw-semibold">{{ gi.start_date.strftime('%d/%m/%Y') }}</td></tr>{% endif %}
+    {% if gi.end_date %}<tr><td class="text-muted">Ngày kết thúc</td><td class="fw-semibold">{{ gi.end_date.strftime('%d/%m/%Y') }}</td></tr>{% endif %}
+  </tbody>
+</table>
+{% else %}
+<p class="text-muted small mb-0">Chưa điền Thông tin chung.</p>
+{% endif %}

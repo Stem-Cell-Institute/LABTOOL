@@ -1,0 +1,468 @@
+{% extends "base.html" %}
+{% block title %}Tổng quan{% endblock %}
+
+{% block content %}
+
+{# ── Greeting header ────────────────────────────────────────────── #}
+{% set hour = cur_month %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h4 class="fw-bold mb-1">
+      {% if user.can_view_all and user.role != 'admin' %}
+        <i class="bi bi-star-fill text-warning me-1" style="font-size:.8em;"></i>Xin chào Viện trưởng!
+      {% else %}
+        Xin chào, {{ user.full_name or user.username }}
+        {% if user.role == 'admin' %}<span class="badge bg-danger ms-2 align-middle" style="font-size:.6rem;">Admin</span>{% endif %}
+      {% endif %}
+    </h4>
+    <div class="text-muted small">
+      <i class="bi bi-calendar3 me-1"></i>{{ month_name }}/{{ cur_year }}
+      {% if user.group %}
+        &nbsp;·&nbsp; <i class="bi bi-people me-1"></i>{{ user.group.name }}
+      {% endif %}
+    </div>
+  </div>
+  {% if not is_overview %}
+  <div class="d-flex gap-2">
+    <a href="/videos/upload" class="btn btn-primary btn-sm">
+      <i class="bi bi-camera-video me-1"></i>Upload Video
+    </a>
+    <a href="/results/new" class="btn btn-outline-primary btn-sm">
+      <i class="bi bi-clipboard2-plus me-1"></i>Nộp Báo cáo
+    </a>
+  </div>
+  {% endif %}
+</div>
+
+{% if is_overview %}
+{# ════════════════════════════════════════════════════════════════
+   ADMIN / CAN_VIEW_ALL VIEW
+   ════════════════════════════════════════════════════════════════ #}
+
+{# Top stats #}
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm text-center py-3">
+      <div class="fs-1 fw-bold" style="color:#c2410c;">{{ diary_total }}</div>
+      <div class="text-muted small"><i class="bi bi-journal-text me-1"></i>Nhật ký thí nghiệm</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm text-center py-3">
+      <div class="fs-1 fw-bold text-success">{{ total_logs }}</div>
+      <div class="text-muted small"><i class="bi bi-journal-check me-1"></i>Nhật ký Video</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm text-center py-3">
+      <div class="fs-1 fw-bold text-info">{{ total_users }}</div>
+      <div class="text-muted small"><i class="bi bi-people me-1"></i>Nghiên cứu viên</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card border-0 shadow-sm text-center py-3">
+      <div class="fs-1 fw-bold {% if pending_review > 0 %}text-warning{% else %}text-success{% endif %}">{{ pending_review }}</div>
+      <div class="text-muted small"><i class="bi bi-hourglass-split me-1"></i>Báo cáo tháng chờ duyệt kết quả</div>
+    </div>
+  </div>
+</div>
+
+{# 2 columns: VidNote | Kết quả NCV #}
+<div class="row g-4 mb-4">
+
+  {# ── Cột trái: VidNote ── #}
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-white border-0 pt-3 pb-0 d-flex justify-content-between align-items-center">
+        <div>
+          <span class="badge bg-primary mb-1" style="font-size:.65rem;letter-spacing:.06em;">VIDNOTE</span>
+          <h6 class="fw-bold mb-0">Báo cáo Video — {{ month_name }}/{{ cur_year }}</h6>
+        </div>
+        <div class="text-end">
+          <div class="fw-bold {% if vid_submitted == vid_total and vid_total > 0 %}text-success{% else %}text-warning{% endif %}">
+            {{ vid_submitted }}/{{ vid_total }}
+          </div>
+          <div class="text-muted" style="font-size:.72rem;">đã nộp</div>
+        </div>
+      </div>
+      <div class="card-body">
+        {% if vid_group %}
+        <div class="vstack gap-2">
+          {% for gs in vid_group %}
+          <div>
+            <div class="d-flex justify-content-between mb-1 small">
+              <a href="/admin/reports/month?year={{ cur_year }}&month={{ cur_month }}&group_id={{ gs.group.id }}"
+                 class="text-dark text-decoration-none fw-semibold">{{ gs.group.name }}</a>
+              <span class="{% if gs.pct == 100 %}text-success{% elif gs.pct >= 50 %}text-warning{% else %}text-danger{% endif %} fw-semibold">
+                {{ gs.submitted }}/{{ gs.total }}
+              </span>
+            </div>
+            <div class="progress" style="height:5px;">
+              <div class="progress-bar bg-{% if gs.pct == 100 %}success{% elif gs.pct >= 50 %}warning{% else %}danger{% endif %}"
+                   style="width:{{ gs.pct }}%"></div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted text-center py-3 mb-0">Chưa có nhóm nghiên cứu nào.</p>
+        {% endif %}
+      </div>
+      <div class="card-footer bg-white border-0 pb-3">
+        <a href="/admin/reports" class="btn btn-outline-primary btn-sm w-100">
+          <i class="bi bi-table me-1"></i>Xem toàn bộ báo cáo video
+        </a>
+      </div>
+    </div>
+  </div>
+
+  {# ── Cột phải: Kết quả NCV ── #}
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm h-100">
+      <div class="card-header bg-white border-0 pt-3 pb-0 d-flex justify-content-between align-items-center">
+        <div>
+          <span class="badge bg-success mb-1" style="font-size:.65rem;letter-spacing:.06em;">KẾT QUẢ NGHIÊN CỨU</span>
+          <h6 class="fw-bold mb-0">Báo cáo kết quả — {{ month_name }}/{{ cur_year }}</h6>
+        </div>
+        <div class="text-end">
+          <div class="fw-bold {% if res_submitted == res_total and res_total > 0 %}text-success{% else %}text-warning{% endif %}">
+            {{ res_submitted }}/{{ res_total }}
+          </div>
+          <div class="text-muted" style="font-size:.72rem;">đã nộp</div>
+        </div>
+      </div>
+      <div class="card-body">
+        {% if res_group %}
+        <div class="vstack gap-2">
+          {% for gs in res_group %}
+          <div>
+            <div class="d-flex justify-content-between mb-1 small">
+              <a href="/results/monthly?year={{ cur_year }}&month={{ cur_month }}&group_id={{ gs.group.id }}"
+                 class="text-dark text-decoration-none fw-semibold">{{ gs.group.name }}</a>
+              <span class="{% if gs.pct == 100 %}text-success{% elif gs.pct >= 50 %}text-warning{% else %}text-danger{% endif %} fw-semibold">
+                {{ gs.submitted }}/{{ gs.total }}
+              </span>
+            </div>
+            <div class="progress" style="height:5px;">
+              <div class="progress-bar bg-{% if gs.pct == 100 %}success{% elif gs.pct >= 50 %}warning{% else %}danger{% endif %}"
+                   style="width:{{ gs.pct }}%"></div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted text-center py-3 mb-0">Chưa có nhóm nghiên cứu nào.</p>
+        {% endif %}
+      </div>
+      <div class="card-footer bg-white border-0 pb-3 d-flex gap-2">
+        <a href="/results/overview" class="btn btn-outline-success btn-sm flex-grow-1">
+          <i class="bi bi-table me-1"></i>Bảng theo dõi kết quả
+        </a>
+        {% if pending_review > 0 %}
+        <a href="/results/monthly?year={{ cur_year }}&month={{ cur_month }}" class="btn btn-warning btn-sm">
+          <i class="bi bi-bell me-1"></i>{{ pending_review }} chờ duyệt
+        </a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{# ── Nhật ký thí nghiệm — dành cho admin/quản lý kiểm tra liêm chính khoa học ── #}
+<div class="card border-0 shadow-sm mb-4">
+  <div class="card-header bg-white border-0 pt-3 pb-0 d-flex justify-content-between align-items-center">
+    <div>
+      <span class="badge mb-1" style="font-size:.65rem;letter-spacing:.06em;background:#ffedd5;color:#c2410c;">NHẬT KÝ THÍ NGHIỆM</span>
+      <h6 class="fw-bold mb-0">Nhật ký thí nghiệm</h6>
+    </div>
+    <div class="text-end">
+      <div class="fw-bold" style="color:#c2410c;">{{ diary_month }}</div>
+      <div class="text-muted" style="font-size:.72rem;">bản ghi tháng này</div>
+    </div>
+  </div>
+  <div class="card-body">
+    {% if diary_recent %}
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0 align-middle small">
+        <thead class="table-light">
+          <tr><th>Nghiên cứu viên</th><th>Tiêu đề</th><th>Tạo lúc</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for e in diary_recent %}
+          <tr>
+            <td>{{ e.author.full_name or e.author.username }}</td>
+            <td class="text-truncate" style="max-width:280px;">{{ e.title or ('Nhật ký #' ~ e.id) }}</td>
+            <td class="text-muted">{{ e.created_at.strftime('%d/%m %H:%M') }}</td>
+            <td><a href="/diary/{{ e.id }}" class="btn btn-sm btn-outline-secondary">Xem</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-muted text-center py-3 mb-0">Chưa có nhật ký thí nghiệm nào được ghi.</p>
+    {% endif %}
+  </div>
+  <div class="card-footer bg-white border-0 pb-3">
+    <div class="text-muted small mb-2"><i class="bi bi-shield-check me-1"></i>{{ diary_total }} bản ghi tổng cộng</div>
+    <a href="/diary/overview" class="btn btn-sm w-100" style="border:1px solid #c2410c;color:#c2410c;">
+      <i class="bi bi-table me-1"></i>Xem tổng quan nhật ký
+    </a>
+  </div>
+</div>
+
+{# Recent videos #}
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-white border-0 pt-3 pb-0 d-flex justify-content-between align-items-center">
+    <h6 class="fw-bold mb-0"><i class="bi bi-clock-history me-2 text-primary"></i>Video mới nhất</h6>
+    <a href="/videos" class="btn btn-outline-secondary btn-sm">Tất cả</a>
+  </div>
+  <div class="card-body p-0">
+    {% if recent_videos %}
+    <div class="table-responsive">
+      <table class="table table-hover mb-0 align-middle small">
+        <thead class="table-light">
+          <tr><th>Video</th><th>Nhóm</th><th>Kỳ</th><th>Trạng thái</th><th>Ngày</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for v in recent_videos %}
+          <tr>
+            <td>
+              <a href="/videos/{{ v.id }}" class="text-decoration-none text-dark fw-semibold">
+                <i class="bi bi-camera-video text-muted me-1"></i>{{ v.original_name }}
+              </a>
+            </td>
+            <td><span class="badge bg-secondary bg-opacity-75">{{ v.group.name }}</span></td>
+            <td>
+              {% if v.report_month %}<span class="badge bg-light text-dark border">T{{ v.report_month }}/{{ v.report_year }}</span>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td>
+              {% if v.status == 'done' %}<span class="badge bg-success">Xong</span>
+              {% elif v.status == 'processing' %}<span class="badge bg-warning text-dark">Đang xử lý</span>
+              {% elif v.status == 'failed' %}<span class="badge bg-danger">Lỗi</span>
+              {% else %}<span class="badge bg-secondary">Chờ</span>{% endif %}
+            </td>
+            <td class="text-muted">{{ v.uploaded_at.strftime('%d/%m %H:%M') }}</td>
+            <td>{% if v.log %}<a href="/logs/{{ v.log.id }}" class="btn btn-sm btn-outline-primary">Nhật ký</a>{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-camera-video" style="font-size:3rem;opacity:.25;"></i>
+      <p class="mt-2">Chưa có video nào. <a href="/videos/upload">Upload video đầu tiên</a></p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+
+{% else %}
+{# ════════════════════════════════════════════════════════════════
+   MEMBER VIEW
+   ════════════════════════════════════════════════════════════════ #}
+
+{# Top mini-stats #}
+<div class="row g-3 mb-4">
+  <div class="col-6">
+    <div class="card border-0 shadow-sm text-center py-3">
+      <div class="fs-2 fw-bold text-primary">{{ total_videos }}</div>
+      <div class="text-muted small"><i class="bi bi-camera-video me-1"></i>Video của tôi</div>
+    </div>
+  </div>
+  <div class="col-6">
+    <div class="card border-0 shadow-sm text-center py-3">
+      <div class="fs-2 fw-bold text-success">{{ total_logs }}</div>
+      <div class="text-muted small"><i class="bi bi-journal-check me-1"></i>Nhật ký Video</div>
+    </div>
+  </div>
+</div>
+
+{# 2 hệ thống song song #}
+<div class="row g-4 mb-4">
+
+  {# ── VidNote ── #}
+  <div class="col-md-6">
+    <div class="card border-0 shadow-sm h-100"
+         style="border-top: 3px solid #0d6efd !important;">
+      <div class="card-body">
+        <div class="d-flex align-items-center gap-2 mb-3">
+          <div class="rounded-2 bg-primary bg-opacity-10 p-2">
+            <i class="bi bi-camera-video-fill text-primary fs-5"></i>
+          </div>
+          <div>
+            <span class="badge bg-primary" style="font-size:.6rem;letter-spacing:.06em;">VIDNOTE</span>
+            <div class="fw-semibold small">Báo cáo Video</div>
+          </div>
+        </div>
+
+        {# Trạng thái bản thân #}
+        <div class="mb-3 p-3 rounded-3 {% if my_video_report %}bg-success bg-opacity-10{% else %}bg-danger bg-opacity-10{% endif %}">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <div class="fw-semibold small">{{ month_name }}/{{ cur_year }}</div>
+              {% if my_video_report %}
+              <span class="badge bg-success mt-1"><i class="bi bi-check-circle me-1"></i>Đã nộp</span>
+              {% else %}
+              <span class="badge bg-danger mt-1"><i class="bi bi-x-circle me-1"></i>Chưa nộp</span>
+              {% endif %}
+            </div>
+            {% if my_video_report %}
+              {% if my_video_report.log %}
+              <a href="/logs/{{ my_video_report.log.id }}" class="btn btn-sm btn-success">
+                <i class="bi bi-journal-text me-1"></i>Xem nhật ký
+              </a>
+              {% else %}
+              <a href="/videos/{{ my_video_report.id }}" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-camera-video me-1"></i>Xem video
+              </a>
+              {% endif %}
+            {% else %}
+            <a href="/videos/upload" class="btn btn-sm btn-primary">
+              <i class="bi bi-upload me-1"></i>Nộp ngay
+            </a>
+            {% endif %}
+          </div>
+        </div>
+
+        {# Tiến độ nhóm #}
+        <div class="small text-muted fw-semibold mb-1">
+          Tiến độ nhóm — {{ user.group.name if user.group else '' }}
+        </div>
+        <div class="d-flex justify-content-between small mb-1">
+          <span>{{ group_vid_submitted }}/{{ group_members }} đã nộp</span>
+          <span class="fw-bold {% if group_vid_pct == 100 %}text-success{% elif group_vid_pct >= 50 %}text-warning{% else %}text-danger{% endif %}">{{ group_vid_pct }}%</span>
+        </div>
+        <div class="progress mb-1" style="height:8px;">
+          <div class="progress-bar bg-{% if group_vid_pct == 100 %}success{% elif group_vid_pct >= 50 %}warning{% else %}danger{% endif %} progress-bar-striped"
+               style="width:{{ group_vid_pct }}%"></div>
+        </div>
+      </div>
+      <div class="card-footer bg-white border-0 pb-3">
+        <a href="/videos" class="btn btn-outline-primary btn-sm w-100">
+          <i class="bi bi-camera-video me-1"></i>Xem tất cả video
+        </a>
+      </div>
+    </div>
+  </div>
+
+  {# ── Kết quả NCV ── #}
+  <div class="col-md-6">
+    <div class="card border-0 shadow-sm h-100"
+         style="border-top: 3px solid #198754 !important;">
+      <div class="card-body">
+        <div class="d-flex align-items-center gap-2 mb-3">
+          <div class="rounded-2 bg-success bg-opacity-10 p-2">
+            <i class="bi bi-clipboard2-data-fill text-success fs-5"></i>
+          </div>
+          <div>
+            <span class="badge bg-success" style="font-size:.6rem;letter-spacing:.06em;">KẾT QUẢ NGHIÊN CỨU</span>
+            <div class="fw-semibold small">Báo cáo kết quả</div>
+          </div>
+        </div>
+
+        {# Trạng thái bản thân #}
+        <div class="mb-3 p-3 rounded-3
+             {% if my_result_report and my_result_report.status in ('submitted','reviewed') %}bg-success bg-opacity-10
+             {% elif my_result_report %}bg-secondary bg-opacity-10
+             {% else %}bg-danger bg-opacity-10{% endif %}">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <div class="fw-semibold small">{{ month_name }}/{{ cur_year }}</div>
+              {% if my_result_report %}
+                {% if my_result_report.status == 'reviewed' %}
+                  {% set dec = my_result_report.manager_decision or my_result_report.ai_verdict %}
+                  {% set lbl = verdict_label.get(dec, ('Đã duyệt','success')) %}
+                  <span class="badge bg-{{ lbl[1] }} mt-1">{{ lbl[0] }}</span>
+                {% elif my_result_report.status == 'submitted' %}
+                  <span class="badge bg-info text-dark mt-1"><i class="bi bi-hourglass me-1"></i>Đã nộp - chờ duyệt</span>
+                {% else %}
+                  <span class="badge bg-secondary mt-1"><i class="bi bi-pencil me-1"></i>Bản nháp</span>
+                {% endif %}
+              {% else %}
+                <span class="badge bg-danger mt-1"><i class="bi bi-x-circle me-1"></i>Chưa nộp</span>
+              {% endif %}
+            </div>
+            {% if my_result_report %}
+            <a href="/results/{{ my_result_report.id }}" class="btn btn-sm btn-outline-success">
+              <i class="bi bi-eye me-1"></i>Xem
+            </a>
+            {% else %}
+            <a href="/results/new" class="btn btn-sm btn-success">
+              <i class="bi bi-clipboard2-plus me-1"></i>Nộp ngay
+            </a>
+            {% endif %}
+          </div>
+          {# Score nếu đã có AI #}
+          {% if my_result_report and my_result_report.ai_status == 'done' and my_result_report.ai_novelty %}
+          <div class="d-flex gap-2 mt-2">
+            <span class="badge bg-light text-dark border small">
+              <i class="bi bi-stars text-warning me-1"></i>Mới: {{ my_result_report.ai_novelty }}/5
+            </span>
+            <span class="badge bg-light text-dark border small">
+              <i class="bi bi-lightning text-primary me-1"></i>Hoàn thành: {{ my_result_report.ai_performance }}/5
+            </span>
+          </div>
+          {% endif %}
+        </div>
+
+        {# Tiến độ nhóm #}
+        <div class="small text-muted fw-semibold mb-1">
+          Tiến độ nhóm — {{ user.group.name if user.group else '' }}
+        </div>
+        <div class="d-flex justify-content-between small mb-1">
+          <span>{{ group_res_submitted }}/{{ group_members }} đã nộp</span>
+          <span class="fw-bold {% if group_res_pct == 100 %}text-success{% elif group_res_pct >= 50 %}text-warning{% else %}text-danger{% endif %}">{{ group_res_pct }}%</span>
+        </div>
+        <div class="progress mb-1" style="height:8px;">
+          <div class="progress-bar bg-{% if group_res_pct == 100 %}success{% elif group_res_pct >= 50 %}warning{% else %}danger{% endif %} progress-bar-striped"
+               style="width:{{ group_res_pct }}%"></div>
+        </div>
+      </div>
+      <div class="card-footer bg-white border-0 pb-3">
+        <a href="/results" class="btn btn-outline-success btn-sm w-100">
+          <i class="bi bi-clipboard2-data me-1"></i>Lịch sử báo cáo kết quả
+        </a>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{# Recent videos (member) #}
+{% if recent_videos %}
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-white border-0 pt-3 pb-0">
+    <h6 class="fw-bold mb-0"><i class="bi bi-clock-history me-2 text-primary"></i>Video gần đây của tôi</h6>
+  </div>
+  <div class="card-body p-0">
+    <div class="list-group list-group-flush">
+      {% for v in recent_videos %}
+      <div class="list-group-item border-0 d-flex justify-content-between align-items-center px-3 py-2">
+        <div>
+          <a href="/videos/{{ v.id }}" class="fw-semibold small text-dark text-decoration-none">
+            <i class="bi bi-camera-video text-muted me-1"></i>{{ v.original_name }}
+          </a>
+          <div class="text-muted" style="font-size:.73rem;">{{ v.uploaded_at.strftime('%d/%m/%Y %H:%M') }}</div>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          {% if v.status == 'done' %}<span class="badge bg-success">Xong</span>
+          {% elif v.status == 'processing' %}<span class="badge bg-warning text-dark">Đang xử lý</span>
+          {% elif v.status == 'failed' %}<span class="badge bg-danger">Lỗi</span>
+          {% else %}<span class="badge bg-secondary">Chờ</span>{% endif %}
+          {% if v.log %}<a href="/logs/{{ v.log.id }}" class="btn btn-sm btn-outline-primary">Nhật ký</a>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endif %}{# end member view #}
+
+{% endblock %}

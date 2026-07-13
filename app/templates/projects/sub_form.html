@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Tạo đề tài nhánh{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center gap-3 mb-4">
+  <a href="/projects/{{ parent.id }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i></a>
+  <h4 class="mb-0 fw-bold"><i class="bi bi-diagram-3-fill me-2" style="color:#c2410c;"></i>Tạo đề tài nhánh</h4>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <div class="alert alert-light border small mb-3">
+      <i class="bi bi-kanban me-1"></i>Thuộc đề tài: <strong>{{ parent.name }}</strong>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <form method="post" action="/projects/{{ parent.id }}/sub-projects">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Tên đề tài nhánh <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control" required
+                   placeholder="VD: Nhánh 1 — Khảo sát in vitro">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Mô tả</label>
+            <textarea name="description" class="form-control" rows="3"
+                      placeholder="Mục tiêu, phạm vi của đề tài nhánh này..."></textarea>
+          </div>
+          <div class="mb-4">
+            <label class="form-label fw-semibold">Người phụ trách nhánh <span class="text-danger">*</span></label>
+            <select name="owner_user_id" class="form-select" required>
+              {% for m in members %}
+              <option value="{{ m.user_id }}" {% if m.user_id == user.id %}selected{% endif %}>
+                {{ m.user.full_name or m.user.username }}{% if m.user_id == parent.owner_id %} (quản lý project){% endif %}
+              </option>
+              {% endfor %}
+            </select>
+            <div class="form-text">Chỉ chọn được trong số thành viên hiện có của đề tài cha. Người này sẽ làm chủ đề tài nhánh — tự quản lý thành viên và thông tin riêng của nhánh.</div>
+          </div>
+          <button type="submit" class="btn" style="background:#c2410c;color:#fff;">
+            <i class="bi bi-check-lg me-1"></i>Tạo đề tài nhánh
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

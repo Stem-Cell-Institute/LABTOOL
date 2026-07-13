@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Danh sách video{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="mb-0 fw-bold"><i class="bi bi-camera-video-fill text-primary me-2"></i>Video thí nghiệm</h4>
+  <a href="/videos/upload" class="btn btn-primary">
+    <i class="bi bi-upload me-1"></i>Upload video mới
+  </a>
+</div>
+
+{% if user.role == 'admin' and groups %}
+<div class="mb-3 d-flex gap-2 flex-wrap">
+  <a href="/videos" class="btn btn-sm {% if not selected_group %}btn-primary{% else %}btn-outline-secondary{% endif %}">Tất cả</a>
+  {% for g in groups %}
+  <a href="/videos?group_id={{ g.id }}" class="btn btn-sm {% if selected_group == g.id %}btn-primary{% else %}btn-outline-secondary{% endif %}">{{ g.name }}</a>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="card border-0 shadow-sm">
+  <div class="card-body p-0">
+    {% if videos %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Tên video</th>
+            {% if user.role == 'admin' %}<th>Nhóm</th>{% endif %}
+            <th>Kích thước</th>
+            <th>Nguồn</th>
+            <th>Trạng thái</th>
+            <th>Ngày upload</th>
+            <th>Thao tác</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for v in videos %}
+          <tr>
+            <td>
+              <i class="bi bi-camera-video text-muted me-2"></i>
+              <a href="/videos/{{ v.id }}" class="text-dark text-decoration-none fw-semibold">{{ v.original_name }}</a>
+            </td>
+            {% if user.role == 'admin' %}
+            <td><span class="badge bg-secondary">{{ v.group.name }}</span></td>
+            {% endif %}
+            <td class="text-muted small">{{ "%.1f"|format(v.file_size/1048576) }} MB</td>
+            <td>
+              {% if v.source == 'folder' %}
+                <span class="badge bg-info text-dark"><i class="bi bi-folder me-1"></i>Thư mục</span>
+              {% else %}
+                <span class="badge bg-light text-dark"><i class="bi bi-upload me-1"></i>Upload</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if v.status == 'done' %}
+                <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Xong</span>
+              {% elif v.status == 'processing' %}
+                <span class="badge bg-warning text-dark" data-video-id="{{ v.id }}"><i class="bi bi-hourglass-split me-1"></i>Đang xử lý</span>
+              {% elif v.status == 'failed' %}
+                <span class="badge bg-danger" title="{{ v.error_message }}"><i class="bi bi-x-circle me-1"></i>Lỗi</span>
+              {% else %}
+                <span class="badge bg-secondary" data-video-id="{{ v.id }}"><i class="bi bi-clock me-1"></i>Chờ xử lý</span>
+              {% endif %}
+            </td>
+            <td class="text-muted small">{{ v.uploaded_at.strftime('%d/%m/%Y %H:%M') }}</td>
+            <td>
+              {% if v.log %}
+                <a href="/logs/{{ v.log.id }}" class="btn btn-sm btn-outline-primary">
+                  <i class="bi bi-journal-text"></i> Nhật ký
+                </a>
+              {% else %}
+                <a href="/videos/{{ v.id }}" class="btn btn-sm btn-outline-secondary">
+                  <i class="bi bi-eye"></i>
+                </a>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-camera-video" style="font-size:3rem; opacity:0.3;"></i>
+      <p class="mt-2 mb-1">Chưa có video nào.</p>
+      <a href="/videos/upload" class="btn btn-primary btn-sm mt-1">Upload video đầu tiên</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Auto-refresh if any video is still processing
+const processingBadges = document.querySelectorAll('[data-video-id]');
+if (processingBadges.length > 0) {
+  setTimeout(() => window.location.reload(), 8000);
+}
+</script>
+{% endblock %}

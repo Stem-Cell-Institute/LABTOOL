@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Tổng quan kết quả nghiên cứu {{ year }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="fw-bold mb-0"><i class="bi bi-clipboard2-data text-primary me-2"></i>Kết quả nghiên cứu — {{ year }}</h4>
+  <div class="d-flex gap-2">
+    <a href="/results/overview?year={{ year-1 }}{% if selected_group %}&group_id={{ selected_group }}{% endif %}"
+       class="btn btn-outline-secondary btn-sm"><i class="bi bi-chevron-left"></i> {{ year-1 }}</a>
+    <span class="btn btn-primary btn-sm disabled">{{ year }}</span>
+    {% if year < cur_year + 1 %}
+    <a href="/results/overview?year={{ year+1 }}{% if selected_group %}&group_id={{ selected_group }}{% endif %}"
+       class="btn btn-outline-secondary btn-sm">{{ year+1 }} <i class="bi bi-chevron-right"></i></a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Filter -->
+<div class="card border-0 shadow-sm mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-end">
+      <input type="hidden" name="year" value="{{ year }}">
+      <div class="col-md-4">
+        <label class="form-label small fw-semibold mb-1">Nhóm</label>
+        <select name="group_id" class="form-select form-select-sm" onchange="this.form.submit()">
+          <option value="">Tất cả nhóm</option>
+          {% for g in groups %}
+          <option value="{{ g.id }}" {% if selected_group == g.id %}selected{% endif %}>{{ g.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <a href="/results/monthly?year={{ year }}&month={{ cur_month }}" class="btn btn-sm btn-outline-info">
+          <i class="bi bi-calendar-month me-1"></i>Xem tháng {{ cur_month }}/{{ year }}
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Chú thích -->
+<div class="d-flex gap-3 mb-3 small flex-wrap">
+  <span><span class="badge bg-success">✓</span> Xuất sắc (90–100đ)</span>
+  <span><span class="badge bg-primary">✓</span> Đạt yêu cầu (70–89đ)</span>
+  <span><span class="badge bg-warning text-dark">!</span> Cần cải thiện (50–69đ)</span>
+  <span><span class="badge bg-dark">✗</span> Xem xét điều chỉnh phụ cấp (&lt;50đ)</span>
+  <span><span class="badge bg-danger">0</span> Vi phạm liêm chính</span>
+  <span><span class="badge bg-info text-dark">⏳</span> Đã nộp — chờ duyệt</span>
+  <span><span class="badge bg-secondary">—</span> Chưa nộp</span>
+</div>
+
+<!-- Ma trận -->
+<div class="card border-0 shadow-sm">
+  <div class="card-body p-0">
+    {% if users %}
+    <div class="table-responsive">
+      <table class="table table-bordered table-sm align-middle mb-0" style="min-width:950px;">
+        <thead class="table-dark">
+          <tr>
+            <th style="min-width:180px;" class="sticky-col">Nghiên cứu viên</th>
+            {% for m in range(1, 13) %}
+            <th class="text-center px-1" style="min-width:58px;">
+              <a href="/results/monthly?year={{ year }}&month={{ m }}{% if selected_group %}&group_id={{ selected_group }}{% endif %}"
+                 class="text-white text-decoration-none small">
+                T{{ m }}{% if m == cur_month and year == cur_year %}<br><span class="badge bg-warning text-dark" style="font-size:.5rem;">now</span>{% endif %}
+              </a>
+            </th>
+            {% endfor %}
+            <th class="text-center">Tổng</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set prev_gid = namespace(val=-1) %}
+          {% for u in users %}
+          {% if u.group_id != prev_gid.val %}
+          {% set prev_gid.val = u.group_id %}
+          <tr class="table-secondary">
+            <td colspan="14" class="fw-semibold py-1 ps-3 small">
+              <i class="bi bi-people-fill me-2 text-primary"></i>
+              {{ u.group.name if u.group else 'Chưa có nhóm' }}
+            </td>
+          </tr>
+          {% endif %}
+
+          {% set total = namespace(n=0) %}
+          <tr>
+            <td class="sticky-col">
+              <div class="fw-semibold small">{{ u.full_name or u.username }}</div>
+              {% if u.full_name %}<div class="text-muted" style="font-size:.73rem;">@{{ u.username }}</div>{% endif %}
+            </td>
+            {% for m in range(1, 13) %}
+            {% set r = matrix[u.id].get(m) %}
+            <td class="text-center p-1">
+              {% if r %}
+                {% set total.n = total.n + 1 %}
+                {% set dec = r.manager_decision or r.ai_verdict %}
+                {% if r.status == 'reviewed' and dec %}
+                  {% set lbl = verdict_label.get(dec, ('?', 'secondary')) %}
+                  <a href="/results/{{ r.id }}"
+                     class="badge bg-{{ lbl[1] }} text-decoration-none"
+                     title="{{ lbl[0] }} — {{ r.author.full_name }}">
+                    {% if dec == 'excellent' %}★{% elif dec == 'approved' %}✓{% elif dec == 'warning' %}!{% else %}✗{% endif %}
+                  </a>
+                {% elif r.status == 'submitted' %}
+                  <a href="/results/{{ r.id }}" class="badge bg-info text-dark text-decoration-none" title="Đã nộp, chờ duyệt">⏳</a>
+                {% else %}
+                  <a href="/results/{{ r.id }}" class="badge bg-secondary text-decoration-none" title="Bản nháp">N</a>
+                {% endif %}
+              {% else %}
+                {% if m < cur_month or year < cur_year %}
+                <span class="text-muted small">—</span>
+                {% else %}
+                <span class="text-light">·</span>
+                {% endif %}
+              {% endif %}
+            </td>
+            {% endfor %}
+            <td class="text-center"><span class="badge bg-{% if total.n >= 6 %}success{% elif total.n >= 3 %}warning{% else %}secondary{% endif %}">{{ total.n }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-5 text-muted"><i class="bi bi-people" style="font-size:3rem;opacity:.3;"></i><p class="mt-2">Chưa có người dùng nào.</p></div>
+    {% endif %}
+  </div>
+</div>
+
+<style>
+.sticky-col{position:sticky;left:0;background:white;z-index:1;border-right:2px solid #dee2e6!important;}
+thead .sticky-col{background:#212529;}
+</style>
+{% endblock %}
