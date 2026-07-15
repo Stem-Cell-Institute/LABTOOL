@@ -1,5 +1,7 @@
 """Rate limiting và login lockout — in-memory, phù hợp cho hệ thống LAN nhỏ."""
 import re
+import secrets
+import string
 import threading
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -8,6 +10,7 @@ _lock = threading.Lock()
 _failed_logins: dict  = defaultdict(list)   # ip -> [datetime, ...]
 _reg_attempts: dict   = defaultdict(list)   # ip -> [datetime, ...]
 _status_checks: dict  = defaultdict(list)   # ip -> [datetime, ...]
+_reset_requests: dict = defaultdict(list)   # ip -> [datetime, ...]
 
 LOGIN_MAX     = 5    # số lần sai tối đa
 LOGIN_WINDOW  = 15   # phút khoá sau khi vượt ngưỡng
@@ -15,6 +18,8 @@ REG_MAX       = 5    # số lần đăng ký tối đa
 REG_WINDOW    = 60   # phút cho cửa sổ đăng ký
 STATUS_MAX    = 10   # số lần kiểm tra trạng thái tối đa — chặn dò email tồn tại
 STATUS_WINDOW = 15   # phút cho cửa sổ kiểm tra trạng thái
+RESET_MAX     = 5    # số lần gửi yêu cầu quên mật khẩu tối đa
+RESET_WINDOW  = 60   # phút cho cửa sổ yêu cầu quên mật khẩu
 
 
 def _prune(lst: list, window_min: int) -> list:
@@ -74,6 +79,20 @@ def record_status_check(ip: str):
         _status_checks[ip].append(datetime.utcnow())
 
 
+# ── Quên mật khẩu rate limit ──────────────────────────────────────────────────
+
+def is_reset_limited(ip: str) -> bool:
+    with _lock:
+        attempts = _prune(_reset_requests[ip], RESET_WINDOW)
+        _reset_requests[ip] = attempts
+        return len(attempts) >= RESET_MAX
+
+
+def record_reset_attempt(ip: str):
+    with _lock:
+        _reset_requests[ip].append(datetime.utcnow())
+
+
 # ── Password strength ─────────────────────────────────────────────────────────
 
 def check_password(password: str) -> str | None:
@@ -88,3 +107,16 @@ def check_password(password: str) -> str | None:
     if not has_upper and not has_digit:
         return "Mật khẩu phải chứa ít nhất 1 chữ hoa (A-Z) hoặc 1 chữ số (0-9)."
     return None
+
+
+def generate_temp_password(length: int = 10) -> str:
+    """Sinh mật khẩu tạm ngẫu nhiên, luôn đạt chuẩn check_password (có hoa và số)."""
+    alphabet = string.ascii_letters + string.digits
+    while True:
+        pwd = "".join(secrets.choice(alphabet) for _ in range(length))
+        if any(c.isupper() for c in pwd) and any(c.isdigit() for c in pwd):
+            return pwd
+
+
+def generate_invite_token() -> str:
+    return secrets.token_urlsafe(32)

@@ -6,10 +6,11 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from app.database import get_db, SessionLocal
-from app.models import User, Group, Video, ExperimentLog, SystemConfig, ReportPeriod, MonthlyReport, AICalibrationExample
+from app.models import User, Group, Video, ExperimentLog, SystemConfig, ReportPeriod, MonthlyReport, AICalibrationExample, PasswordResetRequest, UserInvite
 from app.auth import hash_password
 from app.routers.videos import _analyze_in_background
 from app.activity import log_activity
+from app.security import generate_temp_password, generate_invite_token
 
 router = APIRouter(prefix="/admin")
 templates = Jinja2Templates(directory="app/templates")
@@ -338,6 +339,194 @@ def toggle_active(user_id: int, request: Request, db: Session = Depends(get_db))
                  user_id=admin.id, target_type="user", target_id=target.id)
     request.session["flash"] = msg
     return RedirectResponse("/admin/users", status_code=302)
+
+
+# ── Yêu cầu đặt lại mật khẩu ──────────────────────────────────────────────────
+
+@router.get("/password-resets", response_class=HTMLResponse)
+def password_resets_page(request: Request, db: Session = Depends(get_db)):
+    admin = _get_admin(request, db)
+    if not admin:
+        return RedirectResponse("/login", status_code=302)
+
+    pending = (db.query(PasswordResetRequest)
+                 .filter(PasswordResetRequest.status == "pending")
+                 .order_by(PasswordResetRequest.requested_at)
+                 .all())
+    resolved = (db.query(PasswordResetRequest)
+                  .filter(PasswordResetRequest.status != "pending")
+                  .order_by(PasswordResetRequest.resolved_at.desc())
+                  .limit(30).all())
+    flash = request.session.pop("flash", None)
+    return templates.TemplateResponse(request, "admin/password_resets.html", {
+        "user": admin, "flash": flash, "pending": pending, "resolved": resolved,
+    })
+
+
+@router.get("/password-resets/pending-count")
+def password_resets_pending_count(request: Request, db: Session = Depends(get_db)):
+    from fastapi.responses import JSONResponse
+    admin = _get_admin(request, db)
+    if not admin:
+        return JSONResponse({"count": 0})
+    count = db.query(PasswordResetRequest).filter(PasswordResetRequest.status == "pending").count()
+    return JSONResponse({"count": count})
+
+
+@router.post("/password-resets/{req_id}/approve")
+def password_reset_approve(req_id: int, request: Request, db: Session = Depends(get_db)):
+    from datetime import datetime as _dt
+    admin = _get_admin(request, db)
+    if not admin:
+        return RedirectResponse("/login", status_code=302)
+
+    reset_req = db.get(PasswordResetRequest, req_id)
+    if not reset_req or reset_req.status != "pending":
+        request.session["flash"] = "error:Yeu cau khong ton tai hoac da duoc xu ly."
+        return RedirectResponse("/admin/password-resets", status_code=302)
+
+    target = db.get(User, reset_req.user_id)
+    if not target:
+        request.session["flash"] = "error:Tai khoan khong con ton tai."
+        return RedirectResponse("/admin/password-resets", status_code=302)
+
+    temp_password = generate_temp_password()
+    target.password_hash = hash_password(temp_password)
+
+    reset_req.status = "approved"
+    reset_req.resolved_at = _dt.utcnow()
+    reset_req.resolved_by = admin.id
+    db.commit()
+
+    log_activity(db, "approve_password_reset",
+                 f"Admin duyet reset mat khau cho '{target.email}'",
+                 user_id=admin.id, target_type="user", target_id=target.id)
+
+    request.session["flash"] = (
+        f"Da dat mat khau tam cho '{target.email}': {temp_password} "
+        f"— hay bao cho ho qua kenh khac (Zalo/gap truc tiep) va yeu cau doi ngay sau khi dang nhap."
+    )
+    return RedirectResponse("/admin/password-resets", status_code=302)
+
+
+@router.post("/password-resets/{req_id}/reject")
+def password_reset_reject(req_id: int, request: Request, db: Session = Depends(get_db)):
+    from datetime import datetime as _dt
+    admin = _get_admin(request, db)
+    if not admin:
+        return RedirectResponse("/login", status_code=302)
+
+    reset_req = db.get(PasswordResetRequest, req_id)
+    if not reset_req or reset_req.status != "pending":
+        return RedirectResponse("/admin/password-resets", status_code=302)
+
+    reset_req.status = "rejected"
+    reset_req.resolved_at = _dt.utcnow()
+    reset_req.resolved_by = admin.id
+    db.commit()
+
+    request.session["flash"] = "Da tu choi yeu cau dat lai mat khau."
+    return RedirectResponse("/admin/password-resets", status_code=302)
+
+
+# ── Mời người dùng ────────────────────────────────────────────────────────────
+# Dành cho người sẽ không tự đăng ký (VD: Viện trưởng) — admin tạo lời mời, copy link
+# gửi qua kênh khác (Zalo/tin nhắn) vì hệ thống chưa gửi email tự động. Người được mời
+# mở link tự đặt mật khẩu riêng, tài khoản kích hoạt ngay không cần duyệt thêm.
+
+INVITE_EXPIRE_DAYS = 7
+
+
+@router.get("/invites", response_class=HTMLResponse)
+def invites_page(request: Request, db: Session = Depends(get_db)):
+    admin = _get_admin(request, db)
+    if not admin:
+        return RedirectResponse("/login", status_code=302)
+
+    pending = (db.query(UserInvite)
+                 .filter(UserInvite.status == "pending")
+                 .order_by(UserInvite.created_at.desc())
+                 .all())
+    resolved = (db.query(UserInvite)
+                  .filter(UserInvite.status != "pending")
+                  .order_by(UserInvite.created_at.desc())
+                  .limit(30).all())
+    groups = db.query(Group).order_by(Group.name).all()
+    flash = request.session.pop("flash", None)
+    from datetime import datetime as _dt
+    return templates.TemplateResponse(request, "admin/invites.html", {
+        "user": admin, "flash": flash,
+        "pending": pending, "resolved": resolved, "groups": groups,
+        "now": _dt.utcnow(),
+    })
+
+
+@router.post("/invites/create")
+def invite_create(
+    request: Request,
+    email: str = Form(...),
+    full_name: str = Form(""),
+    role: str = Form("member"),
+    member_type: str = Form("researcher"),
+    can_create_project: str = Form(None),
+    group_id: int = Form(None),
+    db: Session = Depends(get_db),
+):
+    from datetime import datetime as _dt, timedelta as _td
+
+    admin = _get_admin(request, db)
+    if not admin:
+        return RedirectResponse("/login", status_code=302)
+
+    email_norm = email.strip().lower()
+    if db.query(User).filter(User.email == email_norm).first():
+        request.session["flash"] = f"error:Email '{email_norm}' da la tai khoan trong he thong."
+        return RedirectResponse("/admin/invites", status_code=302)
+
+    existing = (db.query(UserInvite)
+                  .filter(UserInvite.email == email_norm, UserInvite.status == "pending")
+                  .first())
+    if existing:
+        request.session["flash"] = f"error:Da co loi moi dang cho '{email_norm}' xac nhan — huy loi moi cu truoc khi gui lai."
+        return RedirectResponse("/admin/invites", status_code=302)
+
+    actual_role = "admin" if role == "admin" else "member"
+    can_view = role == "vien_truong"
+    invite = UserInvite(
+        token=generate_invite_token(),
+        email=email_norm,
+        full_name=full_name.strip(),
+        role=actual_role,
+        can_view_all=can_view,
+        member_type=member_type if member_type in MEMBER_TYPES else "researcher",
+        can_create_project=bool(can_create_project),
+        group_id=group_id if group_id else None,
+        created_by=admin.id,
+        expires_at=_dt.utcnow() + _td(days=INVITE_EXPIRE_DAYS),
+    )
+    db.add(invite)
+    db.commit()
+    log_activity(db, "create_invite", f"Admin tao loi moi cho '{email_norm}'", user_id=admin.id)
+
+    invite_url = str(request.base_url).rstrip("/") + f"/invite/{invite.token}"
+    request.session["flash"] = (
+        f"Da tao loi moi cho '{email_norm}'. Copy link ben duoi va gui qua kenh khac (Zalo/tin nhan): {invite_url}"
+    )
+    return RedirectResponse("/admin/invites", status_code=302)
+
+
+@router.post("/invites/{invite_id}/revoke")
+def invite_revoke(invite_id: int, request: Request, db: Session = Depends(get_db)):
+    admin = _get_admin(request, db)
+    if not admin:
+        return RedirectResponse("/login", status_code=302)
+
+    invite = db.get(UserInvite, invite_id)
+    if invite and invite.status == "pending":
+        invite.status = "revoked"
+        db.commit()
+        request.session["flash"] = f"Da huy loi moi '{invite.email}'."
+    return RedirectResponse("/admin/invites", status_code=302)
 
 
 # ── Folder Scan ──────────────────────────────────────────────────────────────

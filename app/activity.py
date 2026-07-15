@@ -45,6 +45,10 @@ ACTION_META = {
     "diary_delete":    ("bi-trash3",             "danger",  "Xoá nhật ký"),
     "create_project":      ("bi-kanban-fill",    "success", "Tạo project"),
     "add_project_member":  ("bi-person-plus",    "info",    "Thêm thành viên project"),
+    "request_password_reset": ("bi-key",         "warning", "Yêu cầu đặt lại mật khẩu"),
+    "approve_password_reset": ("bi-key-fill",    "success", "Duyệt đặt lại mật khẩu"),
+    "create_invite":          ("bi-envelope-plus","info",   "Mời người dùng"),
+    "accept_invite":          ("bi-person-check-fill","success","Chấp nhận lời mời"),
 }
 
 

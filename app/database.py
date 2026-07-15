@@ -106,3 +106,38 @@ def recover_interrupted_jobs():
                   f"bao cao bi ket 'dang xu ly' thanh 'loi' do restart truoc do.")
     finally:
         db.close()
+
+
+# ── Khôi phục mật khẩu admin 1 lần ──────────────────────────────────────────
+# Dùng khi chủ dự án quên mật khẩu admin và không muốn/không thể nhờ bên vận hành
+# server can thiệp database trực tiếp — chỉ cần gửi codebase đã sửa để họ deploy lại
+# là mật khẩu admin tự được đặt lại đúng 1 lần khi server khởi động. SystemConfig
+# đánh dấu ĐÃ áp dụng để lần restart sau KHÔNG ghi đè lại nếu admin đã tự đổi mật khẩu
+# khác — tránh việc admin đổi mật khẩu xong rồi bị reset ngược mỗi lần server khởi động.
+#
+# XOÁ đoạn này (và lời gọi apply_admin_password_recovery() ở main.py) sau khi xác nhận
+# đã đăng nhập được bằng mật khẩu mới, để không để mật khẩu dạng chữ thường nằm mãi
+# trong mã nguồn.
+_ADMIN_RECOVERY_EMAIL = "ntsinh0409@gmail.com"
+_ADMIN_RECOVERY_PASSWORD = "Admin123"
+_ADMIN_RECOVERY_FLAG_KEY = "admin_pw_recovery_applied__ntsinh0409"
+
+
+def apply_admin_password_recovery():
+    from app.models import User, SystemConfig
+    from app.auth import hash_password
+
+    db = SessionLocal()
+    try:
+        if db.get(SystemConfig, _ADMIN_RECOVERY_FLAG_KEY):
+            return  # da ap dung 1 lan roi, khong lam lai de khong ghi de mat khau admin da tu doi
+        user = db.query(User).filter(User.email == _ADMIN_RECOVERY_EMAIL).first()
+        if user:
+            user.password_hash = hash_password(_ADMIN_RECOVERY_PASSWORD)
+            print(f"[recovery] Da dat lai mat khau cho '{_ADMIN_RECOVERY_EMAIL}'.")
+        else:
+            print(f"[recovery] Khong tim thay user '{_ADMIN_RECOVERY_EMAIL}' de dat lai mat khau.")
+        db.add(SystemConfig(key=_ADMIN_RECOVERY_FLAG_KEY, value="1"))
+        db.commit()
+    finally:
+        db.close()

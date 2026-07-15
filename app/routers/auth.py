@@ -4,13 +4,14 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import User
+from app.models import User, PasswordResetRequest, UserInvite
 from app.auth import verify_password, hash_password
 from app.activity import log_activity
 from app.security import (
     is_login_locked, record_failed_login, clear_failed_logins,
     is_reg_limited, record_reg_attempt,
     is_status_check_limited, record_status_check,
+    is_reset_limited, record_reset_attempt,
     check_password,
 )
 
@@ -87,6 +88,136 @@ def login(
 def logout(request: Request):
     request.session.clear()
     return RedirectResponse("/login", status_code=302)
+
+
+# ── Quên mật khẩu ─────────────────────────────────────────────────────────────
+# Hệ thống chưa cấu hình gửi email (không SMTP) nên đây là luồng "yêu cầu admin duyệt":
+# người dùng gửi yêu cầu, admin vào /admin/password-resets duyệt và tạo mật khẩu tạm,
+# rồi báo cho người dùng qua kênh khác (Zalo/gặp trực tiếp).
+
+@router.get("/forgot-password", response_class=HTMLResponse)
+def forgot_password_page(request: Request):
+    if request.session.get("user_id"):
+        return RedirectResponse("/", status_code=302)
+    return templates.TemplateResponse(request, "forgot_password.html", {})
+
+
+@router.post("/forgot-password")
+def forgot_password_submit(
+    request: Request,
+    email: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    ip = _client_ip(request)
+
+    if is_reset_limited(ip):
+        return templates.TemplateResponse(request, "forgot_password.html", {
+            "error": "Quá nhiều yêu cầu từ thiết bị này. Vui lòng thử lại sau.",
+        }, status_code=429)
+    record_reset_attempt(ip)
+
+    # Thông báo chung chung dù email có tồn tại hay không — tránh lộ email nào đã đăng ký.
+    email_norm = email.strip().lower()
+    if email_norm:
+        user = db.query(User).filter(User.email == email_norm).first()
+        if user and user.is_active:
+            existing = (db.query(PasswordResetRequest)
+                          .filter(PasswordResetRequest.user_id == user.id,
+                                  PasswordResetRequest.status == "pending")
+                          .first())
+            if not existing:
+                db.add(PasswordResetRequest(user_id=user.id))
+                log_activity(db, "request_password_reset",
+                             f"'{user.email}' yeu cau dat lai mat khau",
+                             user_id=user.id)
+                db.commit()
+
+    request.session["flash"] = (
+        "Nếu email tồn tại trong hệ thống, yêu cầu đặt lại mật khẩu đã được gửi tới "
+        "quản trị viên. Vui lòng liên hệ Viện để nhận mật khẩu tạm thời."
+    )
+    return RedirectResponse("/login", status_code=302)
+
+
+# ── Chấp nhận lời mời (admin mời trực tiếp, không cần đăng ký/duyệt) ──────────
+
+def _invite_status_error(invite: UserInvite | None) -> str | None:
+    from datetime import datetime as _dt
+    if not invite:
+        return "Lời mời không tồn tại hoặc đường link không đúng."
+    if invite.status == "accepted":
+        return "Lời mời này đã được sử dụng."
+    if invite.status == "revoked":
+        return "Lời mời này đã bị huỷ."
+    if invite.expires_at and invite.expires_at < _dt.utcnow():
+        return "Lời mời đã hết hạn. Vui lòng liên hệ quản trị viên để được mời lại."
+    return None
+
+
+@router.get("/invite/{token}", response_class=HTMLResponse)
+def invite_accept_page(token: str, request: Request, db: Session = Depends(get_db)):
+    invite = db.query(UserInvite).filter(UserInvite.token == token).first()
+    invite_error = _invite_status_error(invite)
+    if invite_error:
+        return templates.TemplateResponse(request, "invite_accept.html", {"invite_error": invite_error})
+    return templates.TemplateResponse(request, "invite_accept.html", {"invite": invite})
+
+
+@router.post("/invite/{token}")
+def invite_accept_submit(
+    token: str,
+    request: Request,
+    full_name: str = Form(""),
+    password: str = Form(""),
+    confirm_password: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    from datetime import datetime as _dt
+
+    invite = db.query(UserInvite).filter(UserInvite.token == token).first()
+    invite_error = _invite_status_error(invite)
+    if invite_error:
+        return templates.TemplateResponse(request, "invite_accept.html", {"invite_error": invite_error})
+
+    def err(msg):
+        return templates.TemplateResponse(request, "invite_accept.html",
+            {"invite": invite, "error": msg, "full_name_val": full_name})
+
+    if not full_name.strip():
+        return err("Vui lòng nhập họ tên.")
+    pw_err = check_password(password)
+    if pw_err:
+        return err(pw_err)
+    if password != confirm_password:
+        return err("Mật khẩu xác nhận không khớp.")
+    if db.query(User).filter(User.email == invite.email).first():
+        return err("Email này đã có tài khoản — vui lòng đăng nhập.")
+
+    new_user = User(
+        full_name=full_name.strip(),
+        email=invite.email,
+        password_hash=hash_password(password),
+        role=invite.role,
+        member_type=invite.member_type,
+        can_create_project=invite.can_create_project,
+        can_view_all=invite.can_view_all,
+        group_id=invite.group_id,
+        is_active=True,
+        is_approved=True,
+    )
+    db.add(new_user)
+    invite.status = "accepted"
+    invite.accepted_at = _dt.utcnow()
+    db.commit()
+    db.refresh(new_user)
+
+    log_activity(db, "accept_invite",
+                 f"'{new_user.email}' da chap nhan loi moi va tao tai khoan",
+                 user_id=new_user.id)
+
+    request.session["user_id"] = new_user.id
+    request.session["flash"] = "Chào mừng! Tài khoản của bạn đã sẵn sàng."
+    return RedirectResponse("/", status_code=302)
 
 
 # ── Đăng ký tài khoản mới ────────────────────────────────────────────────────

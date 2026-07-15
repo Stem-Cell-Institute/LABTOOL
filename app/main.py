@@ -8,12 +8,13 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.database import engine, Base, sync_schema, recover_interrupted_jobs
+from app.database import engine, Base, sync_schema, recover_interrupted_jobs, apply_admin_password_recovery
 from app.routers import auth, dashboard, videos, logs, comments, admin, results, diary, projects, notebooks, diary_ai
 
 Base.metadata.create_all(bind=engine)
 sync_schema()
 recover_interrupted_jobs()
+apply_admin_password_recovery()
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:

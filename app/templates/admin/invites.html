@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block title %}Mời người dùng{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="mb-0 fw-bold"><i class="bi bi-envelope-plus text-primary me-2"></i>Mời người dùng</h4>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createInviteModal">
+    <i class="bi bi-envelope-plus me-1"></i>Tạo lời mời
+  </button>
+</div>
+
+{% if flash %}
+  {% if flash.startswith('error:') %}
+  <div class="alert alert-danger alert-dismissible fade show">
+    <i class="bi bi-exclamation-triangle me-2"></i>{{ flash[6:] }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% else %}
+  <div class="alert alert-success alert-dismissible fade show">
+    <i class="bi bi-check-circle me-2"></i>
+    {% if 'http' in flash %}
+      {% set before, link = flash.split('http', 1) %}
+      {{ before }}<code class="user-select-all" id="inviteLinkText">http{{ link }}</code>
+      <button type="button" class="btn btn-sm btn-outline-secondary ms-2" onclick="navigator.clipboard.writeText(document.getElementById('inviteLinkText').textContent)">
+        <i class="bi bi-clipboard me-1"></i>Copy
+      </button>
+    {% else %}
+      {{ flash }}
+    {% endif %}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endif %}
+{% endif %}
+
+<div class="alert alert-info py-2 small mb-3">
+  <i class="bi bi-info-circle me-1"></i>
+  Hệ thống chưa gửi email tự động — sau khi tạo lời mời, hãy copy link và gửi cho người được mời
+  qua kênh khác (Zalo, tin nhắn...). Link có hạn <strong>7 ngày</strong>.
+</div>
+
+<div class="card border-warning border-2 shadow-sm mb-4">
+  <div class="card-header bg-warning bg-opacity-10 border-warning border-bottom py-3 d-flex align-items-center gap-2">
+    <i class="bi bi-hourglass-split text-warning fs-5"></i>
+    <h6 class="fw-bold mb-0">Đang chờ chấp nhận
+      <span class="badge bg-warning text-dark ms-1">{{ pending|length }}</span>
+    </h6>
+  </div>
+  <div class="card-body p-0">
+    {% if pending %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 small">
+        <thead class="table-light">
+          <tr>
+            <th>Email</th>
+            <th>Họ tên</th>
+            <th>Vai trò</th>
+            <th>Tạo lúc</th>
+            <th>Hết hạn</th>
+            <th>Link mời</th>
+            <th>Huỷ</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for inv in pending %}
+          <tr {% if inv.expires_at and inv.expires_at < now %}class="opacity-50"{% endif %}>
+            <td><strong>{{ inv.email }}</strong></td>
+            <td>{{ inv.full_name or '—' }}</td>
+            <td>
+              {% if inv.role == 'admin' %}
+              <span class="badge bg-danger">Admin</span>
+              {% elif inv.can_view_all %}
+              <span class="badge bg-warning text-dark">Viện trưởng</span>
+              {% else %}
+              <span class="badge bg-info text-dark">NCV</span>
+              {% endif %}
+            </td>
+            <td class="text-muted">{{ inv.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+            <td class="text-muted">
+              {{ inv.expires_at.strftime('%d/%m/%Y') if inv.expires_at else '—' }}
+              {% if inv.expires_at and inv.expires_at < now %}<span class="badge bg-secondary ms-1">Hết hạn</span>{% endif %}
+            </td>
+            <td>
+              <button type="button" class="btn btn-sm btn-outline-primary"
+                onclick="navigator.clipboard.writeText('{{ request.base_url }}invite/{{ inv.token }}'); this.innerHTML='<i class=\'bi bi-check-lg\'></i> Đã copy'; setTimeout(() => this.innerHTML='<i class=\'bi bi-clipboard me-1\'></i>Copy link', 1500);">
+                <i class="bi bi-clipboard me-1"></i>Copy link
+              </button>
+            </td>
+            <td>
+              <form method="post" action="/admin/invites/{{ inv.id }}/revoke"
+                    onsubmit="return confirm('Huỷ lời mời gửi tới {{ inv.email }}?')">
+                <button type="submit" class="btn btn-sm btn-outline-danger">
+                  <i class="bi bi-x-lg me-1"></i>Huỷ
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="p-4 text-center text-muted small">Chưa có lời mời nào đang chờ.</div>
+    {% endif %}
+  </div>
+</div>
+
+{% if resolved %}
+<div class="card border-0 shadow-sm">
+  <div class="card-header py-3">
+    <h6 class="fw-bold mb-0"><i class="bi bi-clock-history me-2 text-secondary"></i>Lịch sử gần đây</h6>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 small">
+        <thead class="table-light">
+          <tr>
+            <th>Email</th>
+            <th>Trạng thái</th>
+            <th>Chấp nhận lúc</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for inv in resolved %}
+          <tr>
+            <td>{{ inv.email }}</td>
+            <td>
+              {% if inv.status == 'accepted' %}
+              <span class="badge bg-success">Đã chấp nhận</span>
+              {% else %}
+              <span class="badge bg-secondary">Đã huỷ</span>
+              {% endif %}
+            </td>
+            <td class="text-muted">{{ inv.accepted_at.strftime('%d/%m/%Y %H:%M') if inv.accepted_at else '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Create invite modal -->
+<div class="modal fade" id="createInviteModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="post" action="/admin/invites/create">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h6 class="modal-title fw-bold"><i class="bi bi-envelope-plus me-2 text-primary"></i>Tạo lời mời</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Email <span class="text-danger">*</span></label>
+              <input type="email" name="email" class="form-control" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Họ tên <span class="text-muted fw-normal small">(tuỳ chọn)</span></label>
+              <input type="text" name="full_name" class="form-control" placeholder="Người được mời có thể tự sửa sau">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Vai trò</label>
+              <select name="role" class="form-select">
+                <option value="member" selected>NCV (Member)</option>
+                <option value="vien_truong">Viện trưởng</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Loại thành viên</label>
+              <select name="member_type" id="inviteMemberType" class="form-select">
+                <option value="researcher" selected>Nghiên cứu viên</option>
+                <option value="student">Sinh viên / học viên</option>
+                <option value="ncs">Nghiên cứu sinh (NCS)</option>
+              </select>
+            </div>
+            <div class="col-12 form-check">
+              <input type="checkbox" class="form-check-input" id="inviteCanCreateProject" name="can_create_project" checked>
+              <label class="form-check-label" for="inviteCanCreateProject">
+                Cho phép tự tạo project <span class="text-muted small">(luôn bật cho NCV; bật riêng cho Sinh viên/NCS nếu được Viện cho phép hoạt động tự do)</span>
+              </label>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Nhóm <span class="text-muted fw-normal small">(tuỳ chọn)</span></label>
+              {% if groups %}
+              <select name="group_id" class="form-select">
+                <option value="">— Không gán nhóm —</option>
+                {% for g in groups %}
+                <option value="{{ g.id }}">{{ g.name }}</option>
+                {% endfor %}
+              </select>
+              {% else %}
+              <select class="form-select" disabled>
+                <option>— Chưa có nhóm nào —</option>
+              </select>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-envelope-plus me-1"></i>Tạo lời mời</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const typeSelect = document.getElementById('inviteMemberType');
+  const checkbox = document.getElementById('inviteCanCreateProject');
+  if (!typeSelect || !checkbox) return;
+  typeSelect.addEventListener('change', function () {
+    checkbox.checked = (this.value === 'researcher');
+  });
+})();
+</script>
+{% endblock %}

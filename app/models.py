@@ -43,6 +43,49 @@ class User(Base):
     comments = relationship("Comment", back_populates="author")
 
 
+class PasswordResetRequest(Base):
+    """Yêu cầu đặt lại mật khẩu do người dùng gửi khi quên mật khẩu và không đăng nhập được.
+    Hệ thống chưa có gửi email (không cấu hình SMTP) nên admin duyệt thủ công: tạo mật khẩu
+    tạm thời rồi báo cho người dùng qua kênh khác (Zalo/gặp trực tiếp)."""
+    __tablename__ = "password_reset_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    status = Column(String(20), default="pending")  # pending|approved|rejected
+    requested_at = Column(DateTime, default=datetime.utcnow)
+    resolved_at = Column(DateTime, nullable=True)
+    resolved_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    user = relationship("User", foreign_keys=[user_id])
+    resolver = relationship("User", foreign_keys=[resolved_by])
+
+
+class UserInvite(Base):
+    """Lời mời tạo tài khoản do admin gửi cho người chưa dùng hệ thống (VD: Viện trưởng) —
+    thay vì bắt họ tự đăng ký rồi chờ duyệt. Admin tạo lời mời, copy link gửi qua kênh khác
+    (Zalo, tin nhắn...) vì hệ thống chưa gửi email tự động. Người được mời mở link tự đặt
+    mật khẩu riêng — admin không bao giờ biết mật khẩu của họ."""
+    __tablename__ = "user_invites"
+
+    id = Column(Integer, primary_key=True, index=True)
+    token = Column(String(64), unique=True, nullable=False, index=True)
+    email = Column(String(200), nullable=False)
+    full_name = Column(String(120), default="")
+    role = Column(String(20), default="member")            # "admin" | "member"
+    can_view_all = Column(Boolean, default=False)           # Viện trưởng / BGĐ
+    member_type = Column(String(20), default="researcher")
+    can_create_project = Column(Boolean, default=True)
+    group_id = Column(Integer, ForeignKey("groups.id"), nullable=True)
+    status = Column(String(20), default="pending")   # pending|accepted|revoked
+    created_at = Column(DateTime, default=datetime.utcnow)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    expires_at = Column(DateTime, nullable=True)
+    accepted_at = Column(DateTime, nullable=True)
+
+    group = relationship("Group")
+    creator = relationship("User", foreign_keys=[created_by])
+
+
 class Video(Base):
     __tablename__ = "videos"
 
