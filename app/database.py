@@ -108,36 +108,39 @@ def recover_interrupted_jobs():
         db.close()
 
 
-# ── Khôi phục mật khẩu admin 1 lần ──────────────────────────────────────────
-# Dùng khi chủ dự án quên mật khẩu admin và không muốn/không thể nhờ bên vận hành
-# server can thiệp database trực tiếp — chỉ cần gửi codebase đã sửa để họ deploy lại
-# là mật khẩu admin tự được đặt lại đúng 1 lần khi server khởi động. SystemConfig
-# đánh dấu ĐÃ áp dụng để lần restart sau KHÔNG ghi đè lại nếu admin đã tự đổi mật khẩu
-# khác — tránh việc admin đổi mật khẩu xong rồi bị reset ngược mỗi lần server khởi động.
+# ── Tài khoản admin mặc định ─────────────────────────────────────────────────
+# Deploy mới hoàn toàn = database trống (labtool.db nằm trong .gitignore, không theo
+# codebase lên Git) — nếu không có ai tạo sẵn tài khoản admin thì không cách nào đăng
+# nhập vào hệ thống lần đầu. Hàm này chạy mỗi lần khởi động: CHƯA có tài khoản với
+# email này thì tạo mới; ĐÃ có rồi thì không đụng gì cả — đặc biệt là không ghi đè
+# mật khẩu, để admin đổi mật khẩu riêng xong không bị reset ngược mỗi lần restart.
 #
-# XOÁ đoạn này (và lời gọi apply_admin_password_recovery() ở main.py) sau khi xác nhận
-# đã đăng nhập được bằng mật khẩu mới, để không để mật khẩu dạng chữ thường nằm mãi
-# trong mã nguồn.
-_ADMIN_RECOVERY_EMAIL = "ntsinh0409@gmail.com"
-_ADMIN_RECOVERY_PASSWORD = "Admin123"
-_ADMIN_RECOVERY_FLAG_KEY = "admin_pw_recovery_applied__ntsinh0409"
+# [!] Đổi mật khẩu NGAY sau lần đăng nhập đầu tiên (menu góc phải → Hồ sơ) — mật khẩu
+#     mặc định này nằm dạng đọc được trong mã nguồn, ai xem code đều biết.
+DEFAULT_ADMIN_EMAIL = "ntsinh0409@gmail.com"
+DEFAULT_ADMIN_PASSWORD = "Admin123"
 
 
-def apply_admin_password_recovery():
-    from app.models import User, SystemConfig
+def ensure_default_admin():
+    from app.models import User
     from app.auth import hash_password
 
     db = SessionLocal()
     try:
-        if db.get(SystemConfig, _ADMIN_RECOVERY_FLAG_KEY):
-            return  # da ap dung 1 lan roi, khong lam lai de khong ghi de mat khau admin da tu doi
-        user = db.query(User).filter(User.email == _ADMIN_RECOVERY_EMAIL).first()
-        if user:
-            user.password_hash = hash_password(_ADMIN_RECOVERY_PASSWORD)
-            print(f"[recovery] Da dat lai mat khau cho '{_ADMIN_RECOVERY_EMAIL}'.")
-        else:
-            print(f"[recovery] Khong tim thay user '{_ADMIN_RECOVERY_EMAIL}' de dat lai mat khau.")
-        db.add(SystemConfig(key=_ADMIN_RECOVERY_FLAG_KEY, value="1"))
+        if db.query(User).filter(User.email == DEFAULT_ADMIN_EMAIL).first():
+            return  # tai khoan da ton tai — khong dung vao mat khau
+        db.add(User(
+            email=DEFAULT_ADMIN_EMAIL,
+            password_hash=hash_password(DEFAULT_ADMIN_PASSWORD),
+            full_name="Quản Trị Viên",
+            role="admin",
+            member_type="researcher",
+            is_active=True,
+            is_approved=True,
+            can_create_project=True,
+        ))
         db.commit()
+        print(f"[init] Da tao tai khoan admin mac dinh '{DEFAULT_ADMIN_EMAIL}' "
+              f"— hay doi mat khau ngay sau lan dang nhap dau tien!")
     finally:
         db.close()
