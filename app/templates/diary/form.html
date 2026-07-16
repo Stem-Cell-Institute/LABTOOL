@@ -44,6 +44,17 @@
                    placeholder="VD: Nuôi cấy tế bào gốc mẫu A — lần 2">
           </div>
 
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Ngày thực hiện thí nghiệm</label>
+            <input type="date" name="experiment_date" class="form-control" style="max-width:220px;"
+                   max="{{ today_str }}"
+                   value="{{ (entry.log_date.strftime('%Y-%m-%d') if entry else today_str) }}">
+            <div class="form-text">
+              Ngày bạn <strong>làm thí nghiệm</strong> — có thể khác hôm nay nếu giờ mới ngồi ghi lại.
+              Dòng thời gian sẽ xếp theo ngày này. Không chọn được ngày tương lai.
+            </div>
+          </div>
+
           {% if preselect %}
           <div class="mb-3">
             <label class="form-label fw-semibold">Gắn vào</label>

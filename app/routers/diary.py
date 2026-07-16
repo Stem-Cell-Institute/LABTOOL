@@ -101,6 +101,39 @@ def _can_attach_project(db: Session, project_id: int, user_id: int) -> bool:
     return bool(target_user and _can_manage(target_user))
 
 
+def _fold(s: str) -> str:
+    """Bỏ dấu + chữ thường để tìm kiếm không phân biệt hoa/thường và KHÔNG phân biệt dấu:
+    gõ 'te bao goc' vẫn khớp 'tế bào gốc'. 'đ' không tự tách khi chuẩn hoá NFD nên thay tay."""
+    import unicodedata
+    s = (s or "").lower().replace("đ", "d")
+    s = unicodedata.normalize("NFD", s)
+    return "".join(c for c in s if unicodedata.category(c) != "Mn")
+
+
+def _parse_date_only(raw: str):
+    """'YYYY-MM-DD' -> datetime đầu ngày; rỗng/sai -> None (không lọc)."""
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    try:
+        return datetime.strptime(raw, "%Y-%m-%d")
+    except ValueError:
+        return None
+
+
+def _parse_exp_date(raw: str, now: datetime) -> datetime:
+    """Ngày thực hiện thí nghiệm từ form (YYYY-MM-DD). Rỗng/sai định dạng -> hôm nay.
+    KHÔNG cho chọn ngày tương lai — nhật ký là ghi việc đã làm, không phải kế hoạch."""
+    raw = (raw or "").strip()
+    if not raw:
+        return now
+    try:
+        d = datetime.strptime(raw, "%Y-%m-%d")
+    except ValueError:
+        return now
+    return now if d.date() > now.date() else d
+
+
 def _can_view(user: User, entry: DailyLog, db: Session) -> bool:
     return (
         _can_manage(user)
@@ -199,22 +232,35 @@ def _compute_diff(old: str, new: str):
 # ════════════════════════════════════════════════════════════════
 
 @router.get("/diary", response_class=HTMLResponse)
-def my_diary(request: Request, db: Session = Depends(get_db)):
+def my_diary(request: Request, db: Session = Depends(get_db), q: str = "", from_date: str = "", to_date: str = ""):
     user = _get_user(request, db)
     if not user:
         return RedirectResponse("/login", status_code=302)
 
     lock_days = _lock_days(db)
-    entries = (
-        db.query(DailyLog)
-          .filter(DailyLog.user_id == user.id)
-          .order_by(DailyLog.created_at.desc())
-          .all()
-    )
+    query = db.query(DailyLog).filter(DailyLog.user_id == user.id)
+
+    # Lọc theo khoảng NGÀY LÀM THÍ NGHIỆM (làm ở SQL cho nhẹ)
+    d_from = _parse_date_only(from_date)
+    d_to = _parse_date_only(to_date)
+    if d_from:
+        query = query.filter(DailyLog.experiment_date >= d_from)
+    if d_to:
+        query = query.filter(DailyLog.experiment_date < d_to + timedelta(days=1))
+
+    entries = query.order_by(DailyLog.experiment_date.desc(), DailyLog.created_at.desc()).all()
+
+    # Tìm chữ: lọc bằng Python để KHÔNG phân biệt dấu (gõ "te bao" vẫn ra "tế bào").
+    # SQLite không có sẵn so sánh bỏ dấu; số bản ghi mỗi người ở mức vài trăm nên hoàn toàn ổn.
+    qf = _fold(q.strip())
+    if qf:
+        entries = [e for e in entries if qf in _fold(e.title) or qf in _fold(e.content)]
+
     flash = request.session.pop("flash", None)
     return templates.TemplateResponse(request, "diary/list.html", {
         "user": user, "flash": flash, "entries": entries,
         "lock_days": lock_days, "is_locked": lambda e: _is_locked(e, lock_days),
+        "q": q, "from_date": from_date, "to_date": to_date,
     })
 
 
@@ -269,6 +315,54 @@ def _parse_attach_to(raw: str):
     return None, None
 
 
+def _render_markdown(entries):
+    """Gắn sẵn content_html cho từng entry để template in ra nội dung đã render markdown."""
+    import markdown as md_lib
+    for e in entries:
+        e.content_html = md_lib.markdown(
+            e.content or "", extensions=["tables", "fenced_code", "nl2br"]
+        )
+    return entries
+
+
+@router.get("/diary/export", response_class=HTMLResponse)
+def export_my_diary(request: Request, db: Session = Depends(get_db),
+                    q: str = "", from_date: str = "", to_date: str = ""):
+    """Bản in sổ tay nhật ký của chính mình — dùng đúng bộ lọc của trang /diary.
+    Xếp TĂNG DẦN theo ngày thí nghiệm để đọc như một cuốn sổ tay giấy."""
+    user = _get_user(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+
+    query = db.query(DailyLog).filter(DailyLog.user_id == user.id)
+    d_from = _parse_date_only(from_date)
+    d_to = _parse_date_only(to_date)
+    if d_from:
+        query = query.filter(DailyLog.experiment_date >= d_from)
+    if d_to:
+        query = query.filter(DailyLog.experiment_date < d_to + timedelta(days=1))
+    entries = query.order_by(DailyLog.experiment_date.asc(), DailyLog.created_at.asc()).all()
+
+    qf = _fold(q.strip())
+    if qf:
+        entries = [e for e in entries if qf in _fold(e.title) or qf in _fold(e.content)]
+
+    range_label = None
+    if d_from or d_to:
+        range_label = f"{d_from.strftime('%d/%m/%Y') if d_from else '…'} – {d_to.strftime('%d/%m/%Y') if d_to else '…'}"
+
+    return templates.TemplateResponse(request, "diary/export.html", {
+        "user": user,
+        "doc_title": "Sổ tay nhật ký thí nghiệm",
+        "doc_subtitle": (user.full_name or user.email) + (f" · Lọc: “{q}”" if q else ""),
+        "entries": _render_markdown(entries),
+        "show_author": False,
+        "range_label": range_label,
+        "exported_at": datetime.utcnow(),
+        "back_url": "/diary",
+    })
+
+
 @router.get("/diary/new", response_class=HTMLResponse)
 def new_entry_form(request: Request, db: Session = Depends(get_db), attach_to: str = ""):
     user = _get_user(request, db)
@@ -293,6 +387,7 @@ def new_entry_form(request: Request, db: Session = Depends(get_db), attach_to: s
         "user": user, "entry": None, "locked": False, "lock_days": _lock_days(db),
         "my_projects": _my_projects(db, user.id), "my_notebooks": _my_notebooks(db, user.id),
         "preselect": preselect,
+        "today_str": datetime.utcnow().strftime("%Y-%m-%d"),
     })
 
 
@@ -314,6 +409,7 @@ def edit_entry_form(log_id: int, request: Request, db: Session = Depends(get_db)
     return templates.TemplateResponse(request, "diary/form.html", {
         "user": user, "entry": entry, "locked": False, "lock_days": lock_days,
         "my_projects": _my_projects(db, entry.user_id), "my_notebooks": _my_notebooks(db, entry.user_id),
+        "today_str": datetime.utcnow().strftime("%Y-%m-%d"),
     })
 
 
@@ -324,6 +420,7 @@ async def save_entry(
     title: str = Form(""),
     log_id: int = Form(None),
     attach_to: str = Form(""),
+    experiment_date: str = Form(""),
     files: list[UploadFile] = File(default=[]),
     raw_files: list[UploadFile] = File(default=[]),
     db: Session = Depends(get_db),
@@ -335,6 +432,7 @@ async def save_entry(
     lock_days = _lock_days(db)
     now = datetime.utcnow()
     project_id, notebook_id = _parse_attach_to(attach_to)
+    exp_date = _parse_exp_date(experiment_date, now)
 
     if log_id:
         entry = db.get(DailyLog, log_id)
@@ -351,6 +449,7 @@ async def save_entry(
             notebook_id = None
         entry.project_id = project_id
         entry.notebook_id = notebook_id
+        entry.experiment_date = exp_date
 
         new_title = title.strip()
         new_content = content.strip()
@@ -377,10 +476,16 @@ async def save_entry(
             project_id=project_id,
             title=title.strip(),
             content=content.strip(),
+            experiment_date=exp_date,
         )
         db.add(entry)
         db.flush()
         action = "diary_create"
+
+    # Nối mắt xích chuỗi toàn vẹn SAU khi nội dung đã ở trạng thái cuối (entry đã có id nhờ
+    # flush ở trên) — để hash đúng thứ vừa lưu. Xem app/integrity.py.
+    from app import integrity
+    integrity.append(db, entry, "create" if not log_id else "edit", actor_id=user.id)
 
     db.commit()
     db.refresh(entry)
@@ -460,6 +565,12 @@ def delete_entry(log_id: int, request: Request, db: Session = Depends(get_db)):
             os.remove(rf.filename)
         except Exception:
             pass
+
+    # Ghi mắt xích 'delete' TRƯỚC khi xoá — để chuỗi phân biệt được "xoá hợp lệ qua ứng dụng"
+    # với "biến mất khỏi DB không rõ lý do" (dấu hiệu bị xoá lén bằng SQL).
+    from app import integrity
+    integrity.append(db, entry, "delete", actor_id=user.id)
+
     db.delete(entry)
     db.commit()
 
@@ -516,7 +627,7 @@ def diary_overview(
                   Notebook.topic_name.ilike(like),
               ))
         )
-    entries = query.order_by(DailyLog.created_at.desc()).limit(300).all()
+    entries = query.order_by(DailyLog.experiment_date.desc(), DailyLog.created_at.desc()).limit(300).all()
 
     if group_id:
         members = db.query(User).filter(User.group_id == group_id, User.is_active == True).order_by(User.full_name).all()

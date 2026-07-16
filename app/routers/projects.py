@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import User, Project, ProjectMember, DailyLog
+from app.models import User, Project, ProjectMember, DailyLog, ProjectMessage, ProjectChatRead
 from app.activity import log_activity
 
 router = APIRouter()
@@ -375,6 +375,100 @@ def remove_member(project_id: int, user_id: int, request: Request, db: Session =
     return RedirectResponse(f"/projects/{project_id}", status_code=302)
 
 
+# ── Chat nhóm project ─────────────────────────────────────────────────────────
+# Thảo luận chung giữa các thành viên project. Ai xem được project (thành viên, chủ đề
+# tài cha, admin) thì đọc/gửi được — cùng phạm vi với _can_view_project. Dùng polling
+# đơn giản (client hỏi lại mỗi vài giây) — hệ thống LAN nhỏ, không cần WebSocket.
+
+def _chat_unread(db: Session, project_id: int, user_id: int) -> int:
+    """Số tin trong chat project mà user chưa đọc (không tính tin do chính họ gửi)."""
+    from sqlalchemy import func
+    rd = db.query(ProjectChatRead).filter_by(project_id=project_id, user_id=user_id).first()
+    last_read = rd.last_read_id if rd else 0
+    return (db.query(func.count(ProjectMessage.id))
+              .filter(ProjectMessage.project_id == project_id,
+                      ProjectMessage.id > last_read,
+                      ProjectMessage.user_id != user_id).scalar()) or 0
+
+
+def _mark_chat_read(db: Session, project_id: int, user_id: int):
+    """Đánh dấu đã đọc tới tin mới nhất — gọi khi user đang thực sự mở khung chat."""
+    latest = (db.query(ProjectMessage.id)
+                .filter(ProjectMessage.project_id == project_id)
+                .order_by(ProjectMessage.id.desc()).first())
+    if not latest:
+        return
+    rd = db.query(ProjectChatRead).filter_by(project_id=project_id, user_id=user_id).first()
+    if rd:
+        rd.last_read_id = max(rd.last_read_id or 0, latest[0])
+    else:
+        db.add(ProjectChatRead(project_id=project_id, user_id=user_id, last_read_id=latest[0]))
+    db.commit()
+
+
+@router.get("/projects/{project_id}/messages")
+def get_messages(project_id: int, request: Request, after: int = 0, db: Session = Depends(get_db)):
+    from fastapi.responses import JSONResponse
+    user = _get_user(request, db)
+    if not user:
+        return JSONResponse({"messages": []}, status_code=401)
+    project = db.get(Project, project_id)
+    if not project or not _can_view_project(user, project, db):
+        return JSONResponse({"messages": []}, status_code=403)
+
+    q = db.query(ProjectMessage).filter(ProjectMessage.project_id == project_id)
+    if after:
+        q = q.filter(ProjectMessage.id > after)
+    msgs = q.order_by(ProjectMessage.id.asc()).limit(300).all()
+
+    # Đang mở khung chat = đã đọc tới tin mới nhất.
+    _mark_chat_read(db, project_id, user.id)
+
+    return JSONResponse({
+        "me": user.id,
+        "messages": [{
+            "id": m.id,
+            "user_id": m.user_id,
+            "name": (m.user.full_name or m.user.email) if m.user else "?",
+            "content": m.content,
+            "time": m.created_at.strftime("%H:%M · %d/%m"),
+        } for m in msgs],
+    })
+
+
+@router.get("/projects/{project_id}/messages/unread-count")
+def chat_unread_count(project_id: int, request: Request, db: Session = Depends(get_db)):
+    from fastapi.responses import JSONResponse
+    user = _get_user(request, db)
+    if not user:
+        return JSONResponse({"count": 0}, status_code=401)
+    project = db.get(Project, project_id)
+    if not project or not _can_view_project(user, project, db):
+        return JSONResponse({"count": 0}, status_code=403)
+    return JSONResponse({"count": _chat_unread(db, project_id, user.id)})
+
+
+@router.post("/projects/{project_id}/messages")
+def post_message(project_id: int, request: Request, content: str = Form(...), db: Session = Depends(get_db)):
+    from fastapi.responses import JSONResponse
+    user = _get_user(request, db)
+    if not user:
+        return JSONResponse({"ok": False}, status_code=401)
+    project = db.get(Project, project_id)
+    if not project or not _can_view_project(user, project, db):
+        return JSONResponse({"ok": False}, status_code=403)
+
+    text = (content or "").strip()
+    if not text:
+        return JSONResponse({"ok": False, "error": "empty"}, status_code=400)
+    text = text[:4000]  # chặn tin nhắn quá dài
+    m = ProjectMessage(project_id=project_id, user_id=user.id, content=text)
+    db.add(m)
+    db.commit()
+    db.refresh(m)
+    return JSONResponse({"ok": True, "id": m.id})
+
+
 @router.post("/projects/{project_id}/leave")
 def leave_project(project_id: int, request: Request, db: Session = Depends(get_db)):
     user = _get_user(request, db)
@@ -416,6 +510,44 @@ def delete_project(project_id: int, request: Request, db: Session = Depends(get_
     return RedirectResponse("/projects", status_code=302)
 
 
+@router.get("/projects/{project_id}/export", response_class=HTMLResponse)
+def export_project_diary(project_id: int, request: Request, db: Session = Depends(get_db)):
+    """Bản in nhật ký của cả project (gồm các đề tài nhánh mà người xem được phép xem).
+    Xếp TĂNG DẦN theo ngày thí nghiệm — đọc như cuốn sổ tay của cả nhóm."""
+    import markdown as md_lib
+
+    user = _get_user(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    project = db.get(Project, project_id)
+    if not project or not _can_view_project(user, project, db):
+        raise HTTPException(status_code=403)
+
+    ids = [project_id]
+    for cid in _descendant_project_ids(db, project_id):
+        sub = db.get(Project, cid)
+        if sub and _can_view_project(user, sub, db):
+            ids.append(cid)
+
+    entries = (db.query(DailyLog)
+                 .filter(DailyLog.project_id.in_(ids))
+                 .order_by(DailyLog.experiment_date.asc(), DailyLog.created_at.asc())
+                 .all())
+    for e in entries:
+        e.content_html = md_lib.markdown(e.content or "", extensions=["tables", "fenced_code", "nl2br"])
+
+    return templates.TemplateResponse(request, "diary/export.html", {
+        "user": user,
+        "doc_title": f"Nhật ký thí nghiệm — {project.name}",
+        "doc_subtitle": project.full_path_name + (" (gồm cả đề tài nhánh)" if len(ids) > 1 else ""),
+        "entries": entries,
+        "show_author": True,
+        "range_label": None,
+        "exported_at": datetime.utcnow(),
+        "back_url": f"/projects/{project_id}",
+    })
+
+
 @router.get("/projects/{project_id}", response_class=HTMLResponse)
 def view_project(project_id: int, request: Request, db: Session = Depends(get_db)):
     user = _get_user(request, db)
@@ -454,7 +586,7 @@ def view_project(project_id: int, request: Request, db: Session = Depends(get_db
     timeline_logs = (
         db.query(DailyLog)
           .filter(DailyLog.project_id.in_(timeline_ids))
-          .order_by(DailyLog.created_at.desc())
+          .order_by(DailyLog.experiment_date.desc(), DailyLog.created_at.desc())
           .limit(300)
           .all()
     )
@@ -474,6 +606,7 @@ def view_project(project_id: int, request: Request, db: Session = Depends(get_db
         "user": user, "flash": flash, "project": project,
         "members": members, "logs": logs, "timeline_logs": timeline_logs,
         "sub_projects": sub_projects,
+        "chat_unread": _chat_unread(db, project.id, user.id),
         "can_manage_project": can_manage_project,
         "can_create_sub": can_manage_project and _can_create_project(user),
         "can_log_here": can_log_here,

@@ -121,6 +121,40 @@ DEFAULT_ADMIN_EMAIL = "ntsinh0409@gmail.com"
 DEFAULT_ADMIN_PASSWORD = "Admin123"
 
 
+def backfill_experiment_dates():
+    """Bản ghi nhật ký tạo trước khi có trường 'ngày thí nghiệm' sẽ để trống — lấp bằng
+    created_at (giả định ghi trong ngày làm) để timeline và sắp xếp không vướng giá trị rỗng.
+    Idempotent: chạy lại các lần sau không đụng gì vì không còn dòng nào trống.
+    """
+    from app.models import DailyLog
+
+    db = SessionLocal()
+    try:
+        rows = db.query(DailyLog).filter(DailyLog.experiment_date == None).all()
+        if not rows:
+            return
+        for r in rows:
+            r.experiment_date = r.created_at
+        db.commit()
+        print(f"[backfill] Da dat experiment_date = created_at cho {len(rows)} nhat ky cu.")
+    finally:
+        db.close()
+
+
+def seed_integrity_chain():
+    """Khởi tạo chuỗi hash toàn vẹn cho nhật ký đã có sẵn (chỉ chạy lần đầu, khi chuỗi rỗng).
+    Từ mốc này trở đi mọi tạo/sửa/xoá qua ứng dụng đều để lại mắt xích. Xem app/integrity.py."""
+    from app import integrity
+
+    db = SessionLocal()
+    try:
+        n = integrity.seed_existing(db)
+        if n:
+            print(f"[integrity] Da khoi tao chuoi hash cho {n} nhat ky co san.")
+    finally:
+        db.close()
+
+
 def ensure_default_admin():
     from app.models import User
     from app.auth import hash_password

@@ -347,6 +347,80 @@ class ProjectMember(Base):
     adder   = relationship("User", foreign_keys=[added_by])
 
 
+class ProjectMessage(Base):
+    """Tin nhắn thảo luận chung giữa các thành viên của 1 project (chat nhóm).
+    Chỉ người xem được project (thành viên, chủ đề tài cha, admin) mới đọc/gửi."""
+    __tablename__ = "project_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
+    user_id    = Column(Integer, ForeignKey("users.id"), nullable=False)
+    content    = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", foreign_keys=[user_id])
+
+
+class ProjectChatRead(Base):
+    """Mốc 'đã đọc tới đâu' của từng người trong chat nhóm của 1 project — để đếm tin chưa đọc.
+
+    Bảng riêng (không gắn vào ProjectMember) vì chat project mở cho cả người KHÔNG phải thành
+    viên trực tiếp: chủ đề tài cha giám sát và admin cũng đọc/gửi được.
+    """
+    __tablename__ = "project_chat_reads"
+    __table_args__ = (UniqueConstraint("project_id", "user_id", name="uq_project_chat_read"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id   = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
+    user_id      = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    last_read_id = Column(Integer, default=0)
+
+
+# ── Nhắn tin (DM 1-1 + nhóm chat tuỳ chọn) ─────────────────────────────────────
+# Độc lập với project: người dùng nhắn riêng nhau hoặc tự lập nhóm gồm thành viên bất kỳ.
+# Khác với ProjectMessage (chat gắn cứng vào 1 project) ở trên.
+
+class Conversation(Base):
+    __tablename__ = "conversations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    type = Column(String(10), default="dm")          # "dm" (1-1) | "group"
+    title = Column(String(200), default="")          # tên nhóm; DM để trống (suy ra từ 2 người)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_at = Column(DateTime, default=datetime.utcnow)  # thời điểm tin cuối — để sắp xếp danh sách
+
+    members = relationship("ConversationMember", back_populates="conversation", cascade="all, delete-orphan")
+
+
+class ConversationMember(Base):
+    __tablename__ = "conversation_members"
+    __table_args__ = (UniqueConstraint("conversation_id", "user_id", name="uq_conv_user"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    last_read_id = Column(Integer, default=0)         # id tin nhắn cuối đã đọc — tính số chưa đọc
+    joined_at = Column(DateTime, default=datetime.utcnow)
+
+    conversation = relationship("Conversation", back_populates="members")
+    user = relationship("User", foreign_keys=[user_id])
+
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    content = Column(Text, default="")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    edited_at = Column(DateTime, nullable=True)       # có giá trị nếu đã sửa
+    is_deleted = Column(Boolean, default=False)       # xoá mềm — hiện "đã thu hồi"
+
+    user = relationship("User", foreign_keys=[user_id])
+
+
 class DailyLog(Base):
     """Nhật ký thí nghiệm — nghiên cứu viên tự ghi, nhiều bản/ngày.
     Bị khoá vĩnh viễn (kể cả với admin) sau N ngày kể từ lúc tạo, theo cấu hình
@@ -362,9 +436,26 @@ class DailyLog(Base):
     title    = Column(String(300), default="")
     content  = Column(Text, nullable=False)
 
+    # Ngày THỰC HIỆN thí nghiệm — khác created_at (lúc bấm lưu). NCV thường làm xong rồi tối
+    # hoặc hôm sau mới ghi, nên timeline phải theo ngày làm THẬT mới đúng. Giữ cả 2 mốc:
+    # chênh lệch giữa chúng chính là thông tin liêm chính (ghi muộn bao lâu).
+    experiment_date = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
     updated_by = Column(Integer, ForeignKey("users.id"), nullable=True)  # người sửa lần cuối (có thể khác author)
+
+    @property
+    def log_date(self):
+        """Ngày dùng để hiển thị/nhóm theo dòng thời gian — ưu tiên ngày thí nghiệm,
+        lùi về created_at cho bản ghi cũ chưa có dữ liệu này."""
+        return self.experiment_date or self.created_at
+
+    @property
+    def logged_late_days(self) -> int:
+        """Số ngày ghi muộn so với ngày làm thí nghiệm (0 nếu ghi trong ngày)."""
+        if not self.experiment_date:
+            return 0
+        return max(0, (self.created_at.date() - self.experiment_date.date()).days)
 
     author      = relationship("User", foreign_keys=[user_id])
     last_editor = relationship("User", foreign_keys=[updated_by])
@@ -374,6 +465,34 @@ class DailyLog(Base):
     files       = relationship("DailyLogFile", back_populates="log", cascade="all, delete-orphan")
     revisions   = relationship("DailyLogRevision", back_populates="log", cascade="all, delete-orphan",
                                order_by="DailyLogRevision.edited_at.desc()")
+
+
+class IntegrityRecord(Base):
+    """Chuỗi hash chống sửa lén nhật ký (append-only, không bao giờ sửa/xoá dòng nào).
+
+    VÌ SAO CẦN: khoá-sau-N-ngày chỉ chặn ở tầng ứng dụng. Bất kỳ ai vào được server/DB đều
+    sửa thẳng bảng daily_logs bằng SQL mà không để lại dấu vết. Mỗi lần tạo/sửa/xoá nhật ký
+    qua ứng dụng, ta ghi thêm 1 mắt xích ở đây:
+      - content_hash: băm nội dung nhật ký tại thời điểm đó
+      - prev_hash   : record_hash của mắt xích ngay trước → nối thành chuỗi
+      - record_hash : băm chính mắt xích này (gồm cả prev_hash)
+    Sửa lén nội dung trong DB -> content_hash không khớp khi kiểm tra.
+    Xoá/sửa mắt xích -> chuỗi đứt, phát hiện được.
+
+    GIỚI HẠN THẬT: người có quyền DB + đọc được mã nguồn vẫn có thể tính lại TOÀN BỘ chuỗi để
+    che dấu vết, vì không có khoá bí mật/neo ngoài hệ thống. Cách khắc phục rẻ tiền: định kỳ
+    ghi lại 'hash mới nhất' ra nơi ngoài server (in ra, gửi email, sổ giấy) — sau này đối chiếu.
+    """
+    __tablename__ = "integrity_records"
+
+    id = Column(Integer, primary_key=True, index=True)          # cũng là số thứ tự mắt xích
+    log_id       = Column(Integer, nullable=False, index=True)  # KHÔNG dùng ForeignKey: nhật ký bị xoá thì mắt xích vẫn phải còn
+    event        = Column(String(10), nullable=False)           # create | edit | delete
+    content_hash = Column(String(64), nullable=False)
+    prev_hash    = Column(String(64), default="")
+    record_hash  = Column(String(64), nullable=False)
+    actor_id     = Column(Integer, nullable=True)               # ai gây ra thay đổi
+    created_at   = Column(DateTime, default=datetime.utcnow)
 
 
 class DailyLogRevision(Base):

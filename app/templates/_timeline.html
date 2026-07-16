@@ -34,7 +34,8 @@
 <div class="exp-tl">
   {% set ns = namespace(day=None) %}
   {% for e in tl_entries %}
-    {% set d = e.created_at.strftime('%d/%m/%Y') %}
+    {# Nhóm theo NGÀY LÀM THÍ NGHIỆM (log_date), không phải ngày bấm lưu #}
+    {% set d = e.log_date.strftime('%d/%m/%Y') %}
     {% if d != ns.day %}{% set ns.day = d %}
     <div class="tl-day"><span><i class="bi bi-calendar3 me-1"></i>{{ d }}</span></div>
     {% endif %}
@@ -48,7 +49,14 @@
            onkeydown="if(event.key==='Enter'){location.href='/diary/{{ e.id }}'}">
         <div class="d-flex justify-content-between align-items-start gap-2">
           <div class="flex-grow-1">
-            <span class="tl-time"><i class="bi bi-clock me-1"></i>{{ e.created_at.strftime('%H:%M') }}</span>
+            <span class="tl-time" title="Thời điểm ghi nhật ký"><i class="bi bi-clock me-1"></i>{{ e.created_at.strftime('%H:%M') }}</span>
+            {% if e.logged_late_days %}
+            {# Ghi sau ngày làm — nêu rõ để người đọc tự đánh giá độ tin cậy của ghi chép #}
+            <span class="tl-badge bg-warning-subtle text-warning-emphasis border border-warning-subtle ms-1"
+                  title="Thí nghiệm làm ngày {{ e.log_date.strftime('%d/%m/%Y') }}, nhưng {{ e.created_at.strftime('%d/%m/%Y') }} mới ghi">
+              <i class="bi bi-clock-history me-1"></i>ghi muộn {{ e.logged_late_days }} ngày
+            </span>
+            {% endif %}
             {% if tl_show_author %}
             <span class="ms-2 small"><i class="bi bi-person-circle me-1 text-secondary"></i><strong>{{ e.author.full_name or e.author.email }}</strong></span>
             {% endif %}

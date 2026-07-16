@@ -545,6 +545,24 @@ def invite_revoke(invite_id: int, request: Request, db: Session = Depends(get_db
     return RedirectResponse("/admin/invites", status_code=302)
 
 
+# ── Kiểm tra toàn vẹn nhật ký ─────────────────────────────────────────────────
+
+@router.get("/integrity", response_class=HTMLResponse)
+def integrity_page(request: Request, db: Session = Depends(get_db)):
+    """Đối chiếu chuỗi hash với nội dung thật trong DB — phát hiện nhật ký bị sửa/xoá lén
+    bằng SQL (đường mà khoá-sau-N-ngày của ứng dụng không chặn được)."""
+    from app import integrity
+
+    admin = _get_admin(request, db)
+    if not admin:
+        return RedirectResponse("/login", status_code=302)
+
+    report = integrity.verify(db)
+    return templates.TemplateResponse(request, "admin/integrity.html", {
+        "user": admin, "r": report,
+    })
+
+
 # ── Folder Scan ──────────────────────────────────────────────────────────────
 
 def _scan_folder_background(group_id: int, folder_path: str, uploader_id: int):

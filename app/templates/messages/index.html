@@ -1,0 +1,312 @@
+{% extends "base.html" %}
+{% block title %}Tin nhắn{% endblock %}
+{% block content %}
+
+{% if flash %}
+<div class="alert {% if flash.startswith('error:') %}alert-danger{% else %}alert-success{% endif %} alert-dismissible fade show">
+  {{ flash[6:] if flash.startswith('error:') else flash }}
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<div class="row g-3">
+  <!-- ── Danh sách hội thoại ── -->
+  <div class="col-md-4 col-lg-3">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+        <strong><i class="bi bi-chat-dots-fill me-1 text-primary"></i>Tin nhắn</strong>
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#newDmModal" title="Nhắn riêng"><i class="bi bi-pencil-square"></i></button>
+          <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#newGroupModal" title="Tạo nhóm"><i class="bi bi-people-fill"></i></button>
+        </div>
+      </div>
+      <div class="list-group list-group-flush" style="max-height:72vh;overflow:auto;">
+        {% for it in convs %}
+        <a href="/messages?c={{ it.conv.id }}"
+           class="list-group-item list-group-item-action py-2 {% if active and active.conv.id == it.conv.id %}active{% endif %}">
+          <div class="d-flex align-items-center gap-2">
+            <i class="bi {{ 'bi-people-fill' if it.conv.type == 'group' else 'bi-person-circle' }} fs-5 {% if not (active and active.conv.id == it.conv.id) %}text-secondary{% endif %}"></i>
+            <div class="flex-grow-1 min-w-0" style="min-width:0;">
+              <div class="d-flex justify-content-between">
+                <span class="fw-semibold text-truncate" style="max-width:130px;">{{ it.title }}</span>
+                {% if it.unread > 0 %}<span class="badge bg-danger rounded-pill">{{ it.unread }}</span>{% endif %}
+              </div>
+              <div class="small text-truncate {% if not (active and active.conv.id == it.conv.id) %}text-muted{% endif %}" style="max-width:170px;">
+                {% if it.last %}{% if it.last.is_deleted %}<em>đã thu hồi</em>{% else %}{{ it.last.content }}{% endif %}{% else %}<em>Chưa có tin nhắn</em>{% endif %}
+              </div>
+            </div>
+          </div>
+        </a>
+        {% else %}
+        <div class="text-center text-muted small py-4">Chưa có cuộc trò chuyện nào.<br>Bấm <i class="bi bi-pencil-square"></i> để nhắn tin.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Khung chat ── -->
+  <div class="col-md-8 col-lg-9">
+    {% if active %}
+    <div class="card border-0 shadow-sm" data-conv-id="{{ active.conv.id }}">
+      <div class="card-header bg-white py-2">
+        <div class="fw-bold"><i class="bi {{ 'bi-people-fill' if active.is_group else 'bi-person-circle' }} me-2 text-primary"></i>{{ active.title }}</div>
+        {% if active.is_group %}<div class="small text-muted text-truncate"><i class="bi bi-people me-1"></i>{{ active.members|join(', ') }}</div>{% endif %}
+      </div>
+      <div class="card-body" id="chatBody" style="height:60vh;overflow-y:auto;background:#f8f9fa;"></div>
+      <div class="card-footer bg-white p-2">
+        <form id="chatForm" class="d-flex gap-2">
+          <input type="text" id="chatInput" class="form-control" placeholder="Nhắn tin…" autocomplete="off" maxlength="4000">
+          <button type="submit" class="btn" style="background:#c2410c;color:#fff;"><i class="bi bi-send"></i></button>
+        </form>
+      </div>
+    </div>
+    {% else %}
+    <div class="card border-0 shadow-sm">
+      <div class="card-body text-center text-muted py-5">
+        <i class="bi bi-chat-square-text" style="font-size:3rem;opacity:.3;"></i>
+        <p class="mt-2 mb-0">Chọn một cuộc trò chuyện bên trái, hoặc bắt đầu cuộc mới.</p>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Modal: nhắn riêng (DM) -->
+<div class="modal fade" id="newDmModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header py-2"><h6 class="modal-title fw-bold">Nhắn tin riêng</h6><button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <form method="post" action="/messages/dm" id="dmForm">
+          <input type="hidden" name="email" id="dmEmail">
+          <label class="form-label small fw-semibold">Tìm người muốn nhắn</label>
+          <div class="position-relative" id="dmWrap">
+            <input type="text" class="form-control" id="dmSearch" placeholder="Gõ tên (không cần dấu) hoặc email…" autocomplete="off">
+            <div id="dmSuggest" class="list-group position-absolute w-100 shadow" style="z-index:1060;display:none;max-height:240px;overflow:auto;"></div>
+          </div>
+          <div class="small text-muted mt-1">Chọn một người trong danh sách gợi ý để mở cuộc trò chuyện.</div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: tạo nhóm -->
+<div class="modal fade" id="newGroupModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header py-2"><h6 class="modal-title fw-bold">Tạo nhóm chat</h6><button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <form method="post" action="/messages/group" id="groupForm">
+        <div class="modal-body">
+          <label class="form-label small fw-semibold">Tên nhóm <span class="text-muted fw-normal">(tuỳ chọn)</span></label>
+          <input type="text" name="title" class="form-control mb-3" placeholder="VD: Nhóm seminar thứ 6…">
+          <label class="form-label small fw-semibold">Thêm thành viên</label>
+          <div class="position-relative" id="grpWrap">
+            <input type="text" class="form-control" id="grpSearch" placeholder="Gõ tên hoặc email rồi chọn…" autocomplete="off">
+            <div id="grpSuggest" class="list-group position-absolute w-100 shadow" style="z-index:1060;display:none;max-height:220px;overflow:auto;"></div>
+          </div>
+          <div id="grpChips" class="d-flex flex-wrap gap-1 mt-2"></div>
+          <div id="grpHidden"></div>
+          <div class="small text-muted mt-1">Chọn bao nhiêu người tuỳ ý. Bạn tự động là thành viên.</div>
+        </div>
+        <div class="modal-footer py-2">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Huỷ</button>
+          <button type="submit" class="btn btn-primary btn-sm" id="grpSubmit" disabled>Tạo nhóm</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+const CHAT = {
+  active: {{ (active.conv.id if active else 0) }},
+  messages: {{ active_messages | tojson }},
+  since: {{ server_now | tojson }},   // mốc thời gian do server cấp — để hỏi "có gì đổi từ lúc này?"
+};
+
+// ── Tìm người dùng (dùng chung cho DM & nhóm) ──
+function attachUserSearch(inputId, suggestId, wrapId, onPick) {
+  const input = document.getElementById(inputId);
+  const box = document.getElementById(suggestId);
+  const wrap = document.getElementById(wrapId);
+  if (!input) return;
+  let timer = null, ctrl = null;
+  const esc = s => (s || '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const typeLabel = t => t === 'student' ? 'Sinh viên' : (t === 'ncs' ? 'NCS' : 'NCV');
+  const hide = () => { box.style.display = 'none'; box.innerHTML = ''; };
+  input.addEventListener('input', function () {
+    const q = this.value.trim();
+    clearTimeout(timer);
+    if (q.length < 1) { hide(); return; }
+    timer = setTimeout(async () => {
+      if (ctrl) ctrl.abort(); ctrl = new AbortController();
+      try {
+        const r = await fetch('/messages/search-users?q=' + encodeURIComponent(q), { signal: ctrl.signal });
+        if (!r.ok) { hide(); return; }
+        const d = await r.json();
+        if (!d.results.length) { box.innerHTML = '<div class="list-group-item small text-muted">Không tìm thấy.</div>'; box.style.display = 'block'; return; }
+        box.innerHTML = d.results.map(u =>
+          '<button type="button" class="list-group-item list-group-item-action py-1" data-email="' + esc(u.email) + '" data-name="' + esc(u.full_name || u.email) + '">' +
+          '<div class="fw-semibold small">' + esc(u.full_name || u.email) + ' <span class="badge bg-light text-secondary border" style="font-size:.6rem;">' + typeLabel(u.member_type) + '</span></div>' +
+          '<div class="text-muted" style="font-size:.72rem;">' + esc(u.email) + '</div></button>').join('');
+        box.style.display = 'block';
+        box.querySelectorAll('[data-email]').forEach(btn => btn.addEventListener('click', () => {
+          onPick(btn.getAttribute('data-email'), btn.getAttribute('data-name'), input); hide();
+        }));
+      } catch (e) {}
+    }, 200);
+  });
+  document.addEventListener('click', e => { if (!wrap.contains(e.target)) hide(); });
+}
+
+// DM: chọn người → submit ngay
+attachUserSearch('dmSearch', 'dmSuggest', 'dmWrap', (email) => {
+  document.getElementById('dmEmail').value = email;
+  document.getElementById('dmForm').submit();
+});
+
+// Nhóm: chọn người → thêm chip
+const picked = new Set();
+function renderChips() {
+  const chips = document.getElementById('grpChips');
+  const hidden = document.getElementById('grpHidden');
+  chips.innerHTML = ''; hidden.innerHTML = '';
+  picked.forEach(item => {
+    const [email, name] = item.split('|||');
+    const span = document.createElement('span');
+    span.className = 'badge bg-primary d-inline-flex align-items-center gap-1';
+    span.innerHTML = name.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])) + ' <i class="bi bi-x" style="cursor:pointer"></i>';
+    span.querySelector('i').addEventListener('click', () => { picked.delete(item); renderChips(); });
+    chips.appendChild(span);
+    const inp = document.createElement('input'); inp.type = 'hidden'; inp.name = 'members'; inp.value = email; hidden.appendChild(inp);
+  });
+  document.getElementById('grpSubmit').disabled = picked.size < 1;
+}
+attachUserSearch('grpSearch', 'grpSuggest', 'grpWrap', (email, name, input) => {
+  picked.add(email + '|||' + name); renderChips(); input.value = '';
+});
+
+// ── Khung chat: render + polling + gửi/sửa/xoá ──
+(function () {
+  if (!CHAT.active) return;
+  const body = document.getElementById('chatBody');
+  const form = document.getElementById('chatForm');
+  const input = document.getElementById('chatInput');
+  const BASE = '/messages/' + CHAT.active;
+  let lastId = 0, poll = null, since = CHAT.since;
+  const esc = s => (s || '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const atBottom = () => body.scrollHeight - body.scrollTop - body.clientHeight < 60;
+  const toBottom = () => body.scrollTop = body.scrollHeight;
+
+  function bubble(m) {
+    const wrap = document.createElement('div');
+    wrap.className = 'd-flex mb-2 ' + (m.mine ? 'justify-content-end' : 'justify-content-start');
+    wrap.dataset.id = m.id;
+    let inner = '<div style="max-width:78%;">';
+    if (!m.mine) inner += '<div class="small fw-semibold text-secondary" style="font-size:.72rem;">' + esc(m.name) + '</div>';
+    if (m.deleted) {
+      inner += '<div class="px-3 py-2 rounded-3 fst-italic text-muted" style="background:#eee;border:1px solid #e5e7eb;">đã thu hồi</div>';
+    } else {
+      inner += '<div class="px-3 py-2 rounded-3 msg-content" style="background:' + (m.mine ? '#c2410c' : '#fff') + ';color:' + (m.mine ? '#fff' : '#111') + ';border:1px solid ' + (m.mine ? '#c2410c' : '#e5e7eb') + ';white-space:pre-wrap;word-break:break-word;">' + esc(m.content) + '</div>';
+    }
+    inner += '<div class="text-muted d-flex gap-2 ' + (m.mine ? 'justify-content-end' : '') + '" style="font-size:.66rem;">' +
+             '<span>' + esc(m.time) + (m.edited && !m.deleted ? ' · đã sửa' : '') + '</span>';
+    if (m.mine && !m.deleted) {
+      inner += '<a href="#" class="act-edit text-decoration-none">Sửa</a><a href="#" class="act-del text-decoration-none text-danger">Thu hồi</a>';
+    }
+    inner += '</div></div>';
+    wrap.innerHTML = inner;
+    if (m.mine && !m.deleted) {
+      wrap.querySelector('.act-edit').addEventListener('click', e => { e.preventDefault(); startInlineEdit(m, wrap); });
+      wrap.querySelector('.act-del').addEventListener('click', e => { e.preventDefault(); delMsg(m, wrap); });
+    }
+    return wrap;
+  }
+
+  function append(list) {
+    const was = atBottom();
+    list.forEach(m => { body.appendChild(bubble(m)); lastId = Math.max(lastId, m.id); });
+    if (was) toBottom();
+  }
+
+  /** Thay bong bóng đã có bằng bản mới (dùng khi tin bị sửa/thu hồi — kể cả do người khác). */
+  function upsert(m) {
+    const ex = body.querySelector('[data-id="' + m.id + '"]');
+    if (ex) ex.replaceWith(bubble(m));
+    else append([m]);
+  }
+
+  /** Ô sửa ngay tại chỗ — thay cho hộp prompt() của trình duyệt.
+      Enter = lưu, Shift+Enter = xuống dòng, Esc = huỷ. */
+  function startInlineEdit(m, wrap) {
+    const editor = document.createElement('div');
+    editor.className = 'd-flex mb-2 justify-content-end';
+    editor.innerHTML =
+      '<div style="max-width:78%;width:100%;">' +
+        '<textarea class="form-control form-control-sm mb-1" rows="2"></textarea>' +
+        '<div class="d-flex gap-2 justify-content-end">' +
+          '<button type="button" class="btn btn-sm btn-secondary act-cancel">Huỷ</button>' +
+          '<button type="button" class="btn btn-sm btn-primary act-save">Lưu</button>' +
+        '</div>' +
+      '</div>';
+    const ta = editor.querySelector('textarea');
+    ta.value = m.content;
+
+    const cancel = () => editor.replaceWith(bubble(m));
+    const save = async () => {
+      const val = ta.value.trim();
+      if (!val) return;
+      if (val === m.content) { cancel(); return; }
+      const fd = new FormData(); fd.append('content', val);
+      try {
+        const r = await fetch(BASE + '/msg/' + m.id + '/edit', { method: 'POST', body: fd });
+        editor.replaceWith(bubble(r.ok ? Object.assign({}, m, { content: val, edited: true }) : m));
+      } catch (e) { cancel(); }
+    };
+    editor.querySelector('.act-cancel').addEventListener('click', cancel);
+    editor.querySelector('.act-save').addEventListener('click', save);
+    ta.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); save(); }
+      else if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+    });
+
+    wrap.replaceWith(editor);
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+  }
+
+  async function delMsg(m, wrap) {
+    if (!confirm('Thu hồi tin nhắn này?')) return;
+    const r = await fetch(BASE + '/msg/' + m.id + '/delete', { method: 'POST' });
+    if (r.ok) wrap.replaceWith(bubble(Object.assign({}, m, { deleted: true, content: '' })));
+  }
+
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const text = input.value.trim(); if (!text) return;
+    input.value = '';
+    const fd = new FormData(); fd.append('content', text);
+    const r = await fetch(BASE + '/send', { method: 'POST', body: fd });
+    if (r.ok) pollNow(); else input.value = text;
+  });
+
+  async function pollNow() {
+    try {
+      const r = await fetch(BASE + '/poll?after=' + lastId + '&since=' + encodeURIComponent(since));
+      if (!r.ok) return;
+      const d = await r.json();
+      if (d.now) since = d.now;                       // mốc server cho lần hỏi sau
+      if (d.messages && d.messages.length) append(d.messages);
+      if (d.updates && d.updates.length) d.updates.forEach(upsert);  // tin cũ vừa bị sửa/thu hồi
+    } catch (e) {}
+  }
+
+  // render tin ban đầu (server truyền sẵn), rồi poll tin mới + thay đổi
+  append(CHAT.messages);
+  toBottom();
+  input.focus();
+  poll = setInterval(pollNow, 3000);
+})();
+</script>
+{% endblock %}

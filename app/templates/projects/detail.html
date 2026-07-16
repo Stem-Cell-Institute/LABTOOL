@@ -73,11 +73,16 @@
         <h6 class="fw-bold mb-0"><i class="bi bi-diagram-3 me-2 text-success"></i>Dòng thời gian thí nghiệm ({{ timeline_logs|length }})
           <span class="fw-normal text-muted small ms-1">— gồm cả đề tài nhánh</span>
         </h6>
-        {% if can_log_here %}
-        <a href="/diary/new?attach_to=project:{{ project.id }}" class="btn btn-sm btn-success">
-          <i class="bi bi-journal-plus me-1"></i>Ghi nhật ký mới
-        </a>
-        {% endif %}
+        <div class="d-flex gap-2">
+          <a href="/projects/{{ project.id }}/export" target="_blank" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-printer me-1"></i>In / Lưu PDF
+          </a>
+          {% if can_log_here %}
+          <a href="/diary/new?attach_to=project:{{ project.id }}" class="btn btn-sm btn-success">
+            <i class="bi bi-journal-plus me-1"></i>Ghi nhật ký mới
+          </a>
+          {% endif %}
+        </div>
       </div>
       <div class="card-body">
         {% if timeline_logs %}
@@ -114,8 +119,13 @@
     </div>
 
     <div class="card border-0 shadow-sm mb-3">
-      <div class="card-header bg-white border-0 pt-3 pb-0">
+      <div class="card-header bg-white border-0 pt-3 pb-0 d-flex justify-content-between align-items-center">
         <h6 class="fw-bold mb-0"><i class="bi bi-people me-2" style="color:#c2410c;"></i>Thành viên ({{ members|length }})</h6>
+        <button type="button" class="btn btn-sm btn-outline-primary position-relative" data-bs-toggle="modal" data-bs-target="#projectChatModal">
+          <i class="bi bi-chat-dots me-1"></i>Thảo luận nhóm
+          <span id="projectChatBadge" class="badge bg-danger rounded-pill position-absolute top-0 start-100 translate-middle"
+                style="font-size:.6rem;{% if not chat_unread %}display:none;{% endif %}">{{ chat_unread or '' }}</span>
+        </button>
       </div>
       <div class="card-body">
         <div class="vstack gap-2">
@@ -223,4 +233,136 @@
 })();
 </script>
 {% endif %}
+
+<!-- Modal chat nhóm project -->
+<div class="modal fade" id="projectChatModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title fw-bold"><i class="bi bi-chat-dots me-2 text-primary"></i>Thảo luận nhóm — {{ project.name }}</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0">
+        <div id="chatMessages" style="height:60vh;overflow-y:auto;background:#f8f9fa;padding:.9rem;">
+          <div class="text-center text-muted small py-4" id="chatLoading">Đang tải…</div>
+        </div>
+      </div>
+      <div class="modal-footer p-2">
+        <form id="chatForm" class="d-flex gap-2 w-100">
+          <input type="text" id="chatInput" class="form-control" placeholder="Nhắn cho cả nhóm…" autocomplete="off" maxlength="4000">
+          <button type="submit" class="btn" style="background:#c2410c;color:#fff;"><i class="bi bi-send"></i></button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const modalEl = document.getElementById('projectChatModal');
+  const listEl  = document.getElementById('chatMessages');
+  const formEl  = document.getElementById('chatForm');
+  const inputEl = document.getElementById('chatInput');
+  if (!modalEl) return;
+
+  const BASE = '/projects/{{ project.id }}/messages';
+  let lastId = 0, me = null, poll = null;
+  const esc = s => (s || '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+  function atBottom() { return listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight < 60; }
+  function scrollBottom() { listEl.scrollTop = listEl.scrollHeight; }
+
+  function render(msgs, keepScroll) {
+    const wasBottom = atBottom();
+    for (const m of msgs) {
+      const mine = (m.user_id === me);
+      const div = document.createElement('div');
+      div.className = 'd-flex mb-2 ' + (mine ? 'justify-content-end' : 'justify-content-start');
+      div.innerHTML =
+        '<div style="max-width:78%;">' +
+          (mine ? '' : '<div class="small fw-semibold text-secondary" style="font-size:.72rem;">' + esc(m.name) + '</div>') +
+          '<div class="px-3 py-2 rounded-3" style="background:' + (mine ? '#c2410c' : '#fff') + ';color:' + (mine ? '#fff' : '#111') + ';border:1px solid ' + (mine ? '#c2410c' : '#e5e7eb') + ';white-space:pre-wrap;word-break:break-word;">' + esc(m.content) + '</div>' +
+          '<div class="text-muted" style="font-size:.66rem;text-align:' + (mine ? 'right' : 'left') + ';">' + esc(m.time) + '</div>' +
+        '</div>';
+      listEl.appendChild(div);
+      lastId = Math.max(lastId, m.id);
+    }
+    if (!keepScroll || wasBottom) scrollBottom();
+  }
+
+  async function load(initial) {
+    try {
+      const r = await fetch(BASE + '?after=' + (initial ? 0 : lastId));
+      if (!r.ok) { if (initial) listEl.innerHTML = '<div class="text-center text-danger small py-4">Không tải được tin nhắn.</div>'; return; }
+      const d = await r.json();
+      me = d.me;
+      if (initial) {
+        listEl.innerHTML = '';
+        if (!d.messages.length) {
+          listEl.innerHTML = '<div class="text-center text-muted small py-4" id="chatEmpty">Chưa có tin nhắn nào. Bắt đầu trò chuyện!</div>';
+          return;
+        }
+      }
+      if (d.messages.length) {
+        const empty = document.getElementById('chatEmpty');
+        if (empty) empty.remove();   // xoá dòng "chưa có tin nhắn" khi tin đầu tiên tới (kể cả qua polling)
+        render(d.messages, !initial);
+      }
+    } catch (e) { /* bỏ qua lỗi mạng tạm thời */ }
+  }
+
+  formEl.addEventListener('submit', async e => {
+    e.preventDefault();
+    const text = inputEl.value.trim();
+    if (!text) return;
+    inputEl.value = '';
+    const fd = new FormData(); fd.append('content', text);
+    try {
+      const r = await fetch(BASE, { method: 'POST', body: fd });
+      if (r.ok) load(false);
+    } catch (e) { inputEl.value = text; }
+  });
+
+  // ── Badge tin chưa đọc ──
+  // Mở khung chat = server đánh dấu đã đọc, nên ẩn badge ngay. Khi ĐÓNG chat thì poll lại
+  // định kỳ để biết có tin mới mà không cần tải lại trang.
+  const badgeEl = document.getElementById('projectChatBadge');
+  let badgePoll = null;
+
+  function setBadge(n) {
+    if (!badgeEl) return;
+    if (n > 0) { badgeEl.textContent = n > 99 ? '99+' : n; badgeEl.style.display = ''; }
+    else { badgeEl.style.display = 'none'; }
+  }
+  async function refreshBadge() {
+    try {
+      const r = await fetch(BASE + '/unread-count');
+      if (!r.ok) return;
+      const d = await r.json();
+      setBadge(d.count || 0);
+    } catch (e) {}
+  }
+  function startBadgePoll() {
+    if (badgePoll) return;
+    badgePoll = setInterval(refreshBadge, 15000);
+  }
+  function stopBadgePoll() { if (badgePoll) clearInterval(badgePoll); badgePoll = null; }
+
+  modalEl.addEventListener('shown.bs.modal', () => {
+    lastId = 0; listEl.innerHTML = '<div class="text-center text-muted small py-4">Đang tải…</div>';
+    load(true);
+    inputEl.focus();
+    poll = setInterval(() => load(false), 4000);
+    stopBadgePoll();     // đang mở chat thì mọi tin đều được đọc ngay
+    setBadge(0);
+  });
+  modalEl.addEventListener('hidden.bs.modal', () => {
+    if (poll) clearInterval(poll); poll = null;
+    setBadge(0);         // vừa đọc xong
+    startBadgePoll();    // theo dõi tin mới tới sau đó
+  });
+
+  startBadgePoll();
+})();
+</script>
 {% endblock %}

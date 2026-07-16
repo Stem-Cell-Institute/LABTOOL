@@ -6,16 +6,59 @@
   <a href="/diary/new" class="btn btn-success"><i class="bi bi-plus-lg me-1"></i>Ghi nhật ký mới</a>
 </div>
 
-<div class="alert alert-light border small mb-4">
+<div class="alert alert-light border small mb-3">
   <i class="bi bi-info-circle me-1"></i>
   Mỗi nhật ký sẽ tự khoá vĩnh viễn sau <strong>{{ lock_days }} ngày</strong> kể từ lúc tạo — kể cả admin cũng không sửa được sau khi khoá.
+</div>
+
+<div class="card border-0 shadow-sm mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-5">
+        <label class="form-label small fw-semibold mb-1">Tìm trong nhật ký</label>
+        <div class="input-group input-group-sm">
+          <input type="text" name="q" class="form-control" value="{{ q }}"
+                 placeholder="Tiêu đề hoặc nội dung (không cần dấu)…">
+          <button type="submit" class="btn btn-outline-secondary"><i class="bi bi-search"></i></button>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small fw-semibold mb-1">Từ ngày</label>
+        <input type="date" name="from_date" class="form-control form-control-sm" value="{{ from_date }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small fw-semibold mb-1">Đến ngày</label>
+        <input type="date" name="to_date" class="form-control form-control-sm" value="{{ to_date }}">
+      </div>
+      <div class="col-md-1 d-flex gap-1">
+        <button type="submit" class="btn btn-sm btn-primary w-100">Lọc</button>
+      </div>
+      <div class="col-12">
+        {# Giữ nguyên bộ lọc hiện tại khi sang bản in — in đúng phần đang xem #}
+        <a href="/diary/export?q={{ q|urlencode }}&from_date={{ from_date|urlencode }}&to_date={{ to_date|urlencode }}"
+           target="_blank" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-printer me-1"></i>In / Lưu PDF sổ tay{% if q or from_date or to_date %} (theo bộ lọc){% endif %}
+        </a>
+      </div>
+      {% if q or from_date or to_date %}
+      <div class="col-12 small text-muted">
+        Tìm thấy <strong>{{ entries|length }}</strong> nhật ký{% if q %} khớp "{{ q }}"{% endif %}.
+        <a href="/diary" class="ms-1">Xoá bộ lọc</a>
+      </div>
+      {% endif %}
+    </form>
+  </div>
 </div>
 
 {% if not entries %}
 <div class="card border-0 shadow-sm">
   <div class="card-body text-center py-5 text-muted">
     <i class="bi bi-journal" style="font-size:3rem;opacity:.3;"></i>
+    {% if q or from_date or to_date %}
+    <p class="mt-2">Không tìm thấy nhật ký nào khớp bộ lọc. <a href="/diary">Xoá bộ lọc</a></p>
+    {% else %}
     <p class="mt-2">Bạn chưa có nhật ký nào. <a href="/diary/new">Ghi nhật ký đầu tiên</a></p>
+    {% endif %}
   </div>
 </div>
 {% else %}

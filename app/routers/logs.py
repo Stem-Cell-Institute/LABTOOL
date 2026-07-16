@@ -251,5 +251,10 @@ def export_pdf(log_id: int, request: Request, db: Session = Depends(get_db)):
             media_type="application/pdf",
             headers={"Content-Disposition": f'attachment; filename="nhatky_{log_id}.pdf"'},
         )
-    except ImportError:
-        raise HTTPException(status_code=501, detail="weasyprint chua duoc cai dat.")
+    except (ImportError, OSError) as e:
+        # OSError: weasyprint ĐÃ cài nhưng thiếu thư viện hệ thống (libpango/gobject...) —
+        # trường hợp này hay gặp và trước đây lọt xuống thành lỗi 500 khó hiểu.
+        raise HTTPException(
+            status_code=501,
+            detail=f"Máy chủ chưa cài đủ thư viện để xuất PDF (weasyprint): {e}",
+        )

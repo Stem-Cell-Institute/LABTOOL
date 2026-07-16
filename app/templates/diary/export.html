@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ doc_title }}</title>
+  <style>
+    /* Trang in độc lập — KHÔNG dùng base.html để bản in không dính menu/thanh điều hướng.
+       Không phụ thuộc thư viện PDF phía máy chủ (weasyprint cần system libs riêng, dễ thiếu):
+       người dùng bấm In → "Lưu thành PDF" của trình duyệt, xem trước được trước khi in. */
+    @page { size: A4; margin: 18mm 16mm; }
+    body { font-family: "Segoe UI", Arial, sans-serif; color: #1f2937; line-height: 1.55; margin: 0; padding: 24px; background:#f3f4f6; }
+    .sheet { background:#fff; max-width: 800px; margin: 0 auto; padding: 32px 36px; box-shadow: 0 2px 12px rgba(0,0,0,.08); }
+    .toolbar { max-width: 800px; margin: 0 auto 12px; display:flex; gap:8px; justify-content:flex-end; }
+    .btn { border:1px solid #c2410c; background:#c2410c; color:#fff; padding:6px 14px; border-radius:6px; cursor:pointer; font-size:.85rem; text-decoration:none; }
+    .btn.sec { background:#fff; color:#374151; border-color:#d1d5db; }
+
+    h1 { font-size: 1.5rem; margin: 0 0 4px; color:#111827; }
+    .sub { color:#6b7280; font-size:.9rem; margin-bottom: 2px; }
+    .cover { border-bottom: 3px solid #c2410c; padding-bottom: 14px; margin-bottom: 20px; }
+    .meta-row { font-size:.82rem; color:#6b7280; margin-top:8px; }
+
+    .entry { border-left: 3px solid #e5e7eb; padding: 10px 0 10px 14px; margin-bottom: 18px; page-break-inside: avoid; }
+    .entry-date { font-weight: 700; color:#c2410c; font-size:.95rem; }
+    .entry-title { font-weight: 700; font-size: 1.05rem; margin: 3px 0 5px; }
+    .entry-meta { font-size:.76rem; color:#6b7280; margin-bottom: 7px; }
+    .late { background:#fef3c7; color:#92400e; padding: 1px 7px; border-radius: 10px; font-size:.72rem; }
+    .content { font-size:.9rem; }
+    .content img { max-width: 100%; }
+    .content table { border-collapse: collapse; width:100%; margin:.6em 0; }
+    .content th, .content td { border:1px solid #d1d5db; padding:5px 8px; font-size:.85rem; }
+    .content th { background:#f9fafb; }
+    .files { font-size:.78rem; color:#6b7280; margin-top:6px; }
+    .empty { text-align:center; color:#9ca3af; padding: 40px 0; }
+    .foot { margin-top: 26px; padding-top: 10px; border-top:1px solid #e5e7eb; font-size:.72rem; color:#9ca3af; }
+
+    @media print {
+      body { background:#fff; padding:0; }
+      .sheet { box-shadow:none; max-width:none; padding:0; }
+      .toolbar { display:none; }   /* nút bấm không lọt vào bản in */
+    }
+  </style>
+</head>
+<body>
+
+<div class="toolbar">
+  <a href="{{ back_url }}" class="btn sec">← Quay lại</a>
+  <button class="btn" onclick="window.print()">🖨 In / Lưu PDF</button>
+</div>
+
+<div class="sheet">
+  <div class="cover">
+    <h1>{{ doc_title }}</h1>
+    <div class="sub">{{ doc_subtitle }}</div>
+    <div class="meta-row">
+      Người kết xuất: <strong>{{ user.full_name or user.email }}</strong>
+      · Xuất lúc: {{ exported_at.strftime('%H:%M %d/%m/%Y') }}
+      · Số bản ghi: <strong>{{ entries|length }}</strong>
+      {% if range_label %} · Khoảng: {{ range_label }}{% endif %}
+    </div>
+  </div>
+
+  {% if not entries %}
+  <div class="empty">Không có nhật ký nào trong phạm vi đã chọn.</div>
+  {% else %}
+    {% for e in entries %}
+    <div class="entry">
+      <div class="entry-date">{{ e.log_date.strftime('%d/%m/%Y') }}</div>
+      <div class="entry-title">{{ e.title or ('Nhật ký #' ~ e.id) }}</div>
+      <div class="entry-meta">
+        {% if show_author %}Người thực hiện: <strong>{{ e.author.full_name or e.author.email }}</strong> · {% endif %}
+        Ghi lúc: {{ e.created_at.strftime('%H:%M %d/%m/%Y') }}
+        {% if e.logged_late_days %}<span class="late">ghi muộn {{ e.logged_late_days }} ngày</span>{% endif %}
+        {% if e.project %} · Project: {{ e.project.full_path_name }}{% elif e.notebook %} · Sổ tay: {{ e.notebook.topic_name }}{% endif %}
+      </div>
+      <div class="content">{{ e.content_html | safe }}</div>
+      {% if e.files %}
+      <div class="files">
+        📎 Tệp đính kèm ({{ e.files|length }}):
+        {% for f in e.files %}{{ f.original_name }}{% if not loop.last %}, {% endif %}{% endfor %}
+        <em>— tệp không kèm trong bản in, xem trên hệ thống.</em>
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="foot">
+    SCI Portal — Viện Tế Bào Gốc · Nhật ký thí nghiệm điện tử.
+    Bản kết xuất chỉ để tham khảo/lưu trữ; bản gốc có giá trị pháp lý nằm trên hệ thống.
+  </div>
+</div>
+
+</body>
+</html>

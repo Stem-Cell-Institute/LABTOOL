@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Kiểm tra toàn vẹn nhật ký{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0 fw-bold"><i class="bi bi-shield-check text-primary me-2"></i>Kiểm tra toàn vẹn nhật ký</h4>
+  <a href="/admin/integrity" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-clockwise me-1"></i>Kiểm tra lại</a>
+</div>
+
+{% if r.ok %}
+<div class="alert alert-success d-flex align-items-center gap-3">
+  <i class="bi bi-shield-fill-check fs-2"></i>
+  <div>
+    <div class="fw-bold">Toàn vẹn — không phát hiện dấu hiệu sửa lén.</div>
+    <div class="small">Đã đối chiếu {{ r.total_records }} mắt xích với {{ r.total_entries }} nhật ký trong hệ thống.</div>
+  </div>
+</div>
+{% else %}
+<div class="alert alert-danger d-flex align-items-center gap-3">
+  <i class="bi bi-shield-fill-exclamation fs-2"></i>
+  <div>
+    <div class="fw-bold">CẢNH BÁO: phát hiện bất thường!</div>
+    <div class="small">Có dấu hiệu dữ liệu bị can thiệp trực tiếp, không qua ứng dụng. Xem chi tiết bên dưới.</div>
+  </div>
+</div>
+{% endif %}
+
+<div class="row g-3 mb-3">
+  <div class="col-md-3"><div class="card border-0 shadow-sm"><div class="card-body py-3 text-center">
+    <div class="fs-4 fw-bold">{{ r.total_entries }}</div><div class="small text-muted">Nhật ký</div>
+  </div></div></div>
+  <div class="col-md-3"><div class="card border-0 shadow-sm"><div class="card-body py-3 text-center">
+    <div class="fs-4 fw-bold">{{ r.total_records }}</div><div class="small text-muted">Mắt xích chuỗi</div>
+  </div></div></div>
+  <div class="col-md-3"><div class="card border-0 shadow-sm"><div class="card-body py-3 text-center">
+    <div class="fs-4 fw-bold {% if r.modified or r.chain_breaks %}text-danger{% else %}text-success{% endif %}">
+      {{ r.modified|length + r.chain_breaks|length }}</div>
+    <div class="small text-muted">Sửa lén / chuỗi đứt</div>
+  </div></div></div>
+  <div class="col-md-3"><div class="card border-0 shadow-sm"><div class="card-body py-3 text-center">
+    <div class="fs-4 fw-bold {% if r.unrecorded or r.vanished %}text-danger{% else %}text-success{% endif %}">
+      {{ r.unrecorded|length + r.vanished|length }}</div>
+    <div class="small text-muted">Chèn / xoá chui</div>
+  </div></div></div>
+</div>
+
+{% if r.chain_breaks %}
+<div class="card border-danger border-2 shadow-sm mb-3">
+  <div class="card-header bg-danger bg-opacity-10 fw-bold"><i class="bi bi-link-45deg me-1"></i>Chuỗi bị đứt ({{ r.chain_breaks|length }})</div>
+  <div class="card-body p-0"><table class="table table-sm mb-0">
+    <thead class="table-light"><tr><th>Mắt xích #</th><th>Nhật ký</th><th>Ghi lúc</th></tr></thead>
+    <tbody>{% for c in r.chain_breaks %}<tr>
+      <td>{{ c.seq }}</td><td>#{{ c.log_id }}</td><td class="text-muted small">{{ c.at.strftime('%H:%M %d/%m/%Y') }}</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  <div class="card-footer small text-muted">Có người đã sửa hoặc xoá chính bản ghi chuỗi trong database.</div>
+</div>
+{% endif %}
+
+{% if r.modified %}
+<div class="card border-danger border-2 shadow-sm mb-3">
+  <div class="card-header bg-danger bg-opacity-10 fw-bold"><i class="bi bi-pencil-square me-1"></i>Nhật ký bị sửa thẳng trong DB ({{ r.modified|length }})</div>
+  <div class="card-body p-0"><table class="table table-sm mb-0">
+    <thead class="table-light"><tr><th>ID</th><th>Tiêu đề</th><th>Tác giả</th><th>Mắt xích gần nhất</th><th></th></tr></thead>
+    <tbody>{% for m in r.modified %}<tr>
+      <td>#{{ m.log_id }}</td><td>{{ m.title }}</td><td>{{ m.author }}</td>
+      <td class="text-muted small">{{ m.recorded_at.strftime('%H:%M %d/%m/%Y') }}</td>
+      <td><a href="/diary/{{ m.log_id }}" class="btn btn-sm btn-outline-primary">Xem</a></td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  <div class="card-footer small text-muted">Nội dung hiện tại không khớp hash đã ghi — nhật ký đã bị thay đổi ngoài ứng dụng.</div>
+</div>
+{% endif %}
+
+{% if r.vanished %}
+<div class="card border-danger border-2 shadow-sm mb-3">
+  <div class="card-header bg-danger bg-opacity-10 fw-bold"><i class="bi bi-eraser me-1"></i>Nhật ký biến mất không rõ lý do ({{ r.vanished|length }})</div>
+  <div class="card-body p-0"><table class="table table-sm mb-0">
+    <thead class="table-light"><tr><th>ID</th><th>Sự kiện cuối</th><th>Lúc</th></tr></thead>
+    <tbody>{% for v in r.vanished %}<tr>
+      <td>#{{ v.log_id }}</td><td>{{ v.last_event }}</td><td class="text-muted small">{{ v.at.strftime('%H:%M %d/%m/%Y') }}</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  <div class="card-footer small text-muted">Có mắt xích chứng minh nhật ký từng tồn tại, nhưng nay không còn trong DB và không có thao tác xoá hợp lệ nào.</div>
+</div>
+{% endif %}
+
+{% if r.unrecorded %}
+<div class="card border-warning border-2 shadow-sm mb-3">
+  <div class="card-header bg-warning bg-opacity-10 fw-bold"><i class="bi bi-question-circle me-1"></i>Nhật ký không có mắt xích ({{ r.unrecorded|length }})</div>
+  <div class="card-body p-0"><table class="table table-sm mb-0">
+    <thead class="table-light"><tr><th>ID</th><th>Tiêu đề</th><th>Tác giả</th><th>Tạo lúc</th></tr></thead>
+    <tbody>{% for u in r.unrecorded %}<tr>
+      <td>#{{ u.log_id }}</td><td>{{ u.title }}</td><td>{{ u.author }}</td>
+      <td class="text-muted small">{{ u.created_at.strftime('%H:%M %d/%m/%Y') }}</td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+  <div class="card-footer small text-muted">Nhật ký có trong DB nhưng chưa từng đi qua ứng dụng — dấu hiệu bị chèn thẳng bằng SQL.</div>
+</div>
+{% endif %}
+
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-white fw-bold"><i class="bi bi-fingerprint me-1"></i>Hash mới nhất của chuỗi</div>
+  <div class="card-body">
+    {% if r.latest_hash %}
+    <code class="user-select-all d-block p-2 bg-light rounded" style="word-break:break-all;">{{ r.latest_hash }}</code>
+    <div class="small text-muted mt-1">Mắt xích cuối ghi lúc {{ r.latest_at.strftime('%H:%M %d/%m/%Y') }}.</div>
+    {% else %}
+    <div class="text-muted small">Chuỗi còn rỗng — chưa có nhật ký nào.</div>
+    {% endif %}
+
+    <div class="small text-muted mt-3 mb-0">
+      <i class="bi bi-info-circle me-1"></i>
+      Nên chép hash này ra ngoài hệ thống theo định kỳ (in kèm biên bản, ghi vào sổ họp,
+      lưu cùng hồ sơ nghiệm thu) để có mốc đối chiếu độc lập về sau.
+    </div>
+  </div>
+</div>
+
+{% endblock %}

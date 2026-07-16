@@ -8,12 +8,15 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.database import engine, Base, sync_schema, recover_interrupted_jobs, ensure_default_admin
-from app.routers import auth, dashboard, videos, logs, comments, admin, results, diary, projects, notebooks, diary_ai
+from app.database import (engine, Base, sync_schema, recover_interrupted_jobs,
+                          ensure_default_admin, backfill_experiment_dates, seed_integrity_chain)
+from app.routers import auth, dashboard, videos, logs, comments, admin, results, diary, projects, notebooks, diary_ai, messages
 
 Base.metadata.create_all(bind=engine)
 sync_schema()
 recover_interrupted_jobs()
+backfill_experiment_dates()
+seed_integrity_chain()   # phải chạy SAU backfill để hash đúng experiment_date đã lấp
 ensure_default_admin()
 
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -29,7 +32,7 @@ app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, max_age=86400 * 7)
 
 # Tăng số này mỗi khi đẩy bản sửa quan trọng — dùng để tự kiểm tra qua /_status xem
 # server đã thực sự chạy code mới sau khi deploy hay chưa, không cần nhờ ai vào xem log.
-BUILD_VERSION = "2026-07-15-10"
+BUILD_VERSION = "2026-07-15-16"
 
 
 @app.get("/_status")
@@ -68,3 +71,4 @@ app.include_router(diary_ai.router)  # phải đăng ký TRƯỚC diary.router �
 app.include_router(diary.router)
 app.include_router(projects.router)
 app.include_router(notebooks.router)
+app.include_router(messages.router)

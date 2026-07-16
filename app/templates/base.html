@@ -76,6 +76,7 @@
           <li><a class="dropdown-item" href="/admin/stats"><i class="bi bi-bar-chart me-2 text-secondary"></i>Thống kê</a></li>
           <li><a class="dropdown-item" href="/admin/activity"><i class="bi bi-journal-richtext me-2 text-secondary"></i>Nhật ký hoạt động</a></li>
           <li><a class="dropdown-item" href="/admin/issues"><i class="bi bi-exclamation-triangle me-2 text-secondary"></i>Video lỗi</a></li>
+          <li><a class="dropdown-item" href="/admin/integrity"><i class="bi bi-shield-check me-2 text-secondary"></i>Kiểm tra toàn vẹn nhật ký</a></li>
         </ul>
       </div>
       {% endif %}
@@ -120,6 +121,12 @@
     <!-- ── Tổng quan (toàn hệ thống) ────────────────────── -->
     <a class="nav-overview-link {% if request.url.path == '/' %}active{% endif %}" href="/">
       <i class="bi bi-grid-3x3-gap-fill me-1"></i>Tổng quan
+    </a>
+
+    <!-- ── Tin nhắn ─────────────────────────────────────── -->
+    <a class="nav-overview-link {% if request.url.path == '/messages' %}active{% endif %}" href="/messages" style="position:relative;">
+      <i class="bi bi-chat-dots-fill me-1"></i>Tin nhắn
+      <span id="msgUnreadBadge" class="badge bg-danger rounded-pill" style="display:none;font-size:.6rem;position:absolute;top:2px;right:-2px;">0</span>
     </a>
 
     <!-- ── Divider ─────────────────────────────────────── -->
@@ -221,6 +228,23 @@
 <script>document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootstrap.Tooltip(el));</script>
 {% if user %}
 <script>
+// Badge số tin nhắn chưa đọc — poll định kỳ để biết có tin mới mà không cần mở khu Tin nhắn.
+(function () {
+  const badge = document.getElementById('msgUnreadBadge');
+  if (!badge) return;
+  function refresh() {
+    fetch('/messages/unread-total')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d) return;
+        if (d.count > 0) { badge.textContent = d.count > 99 ? '99+' : d.count; badge.style.display = ''; }
+        else { badge.style.display = 'none'; }
+      }).catch(() => {});
+  }
+  refresh();
+  setInterval(refresh, 15000);
+})();
+
 // Badge tài khoản chờ duyệt (chỉ admin)
 {% if user.role == 'admin' %}
 (function() {
