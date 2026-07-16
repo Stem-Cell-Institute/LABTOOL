@@ -264,6 +264,51 @@ async def create_sub_project(project_id: int, request: Request, db: Session = De
     return RedirectResponse(f"/projects/{sub.id}", status_code=302)
 
 
+def _fold(s: str) -> str:
+    """Bỏ dấu + chữ thường để tìm kiếm không phân biệt hoa/thường và KHÔNG phân biệt dấu
+    tiếng Việt: gõ 'truong sinh' vẫn khớp 'Nguyễn Trường Sinh'. 'đ' NFD không tự tách nên
+    thay tay."""
+    import unicodedata
+    s = (s or "").lower().replace("đ", "d")
+    s = unicodedata.normalize("NFD", s)
+    return "".join(c for c in s if unicodedata.category(c) != "Mn")
+
+
+@router.get("/projects/{project_id}/search-users")
+def search_users(project_id: int, request: Request, q: str = "", db: Session = Depends(get_db)):
+    """Gợi ý tài khoản để thêm vào project — tìm theo HỌ TÊN hoặc EMAIL (bỏ dấu, không phân
+    biệt hoa/thường). Chỉ người quản lý project mới gọi được. Loại người đã là thành viên."""
+    from fastapi.responses import JSONResponse
+    user = _get_user(request, db)
+    if not user:
+        return JSONResponse({"results": []}, status_code=401)
+    project = db.get(Project, project_id)
+    if not project or not _can_manage_project(user, project, db):
+        return JSONResponse({"results": []}, status_code=403)
+
+    qf = _fold(q.strip())
+    if not qf:
+        return JSONResponse({"results": []})
+
+    member_ids = {uid for (uid,) in db.query(ProjectMember.user_id)
+                                       .filter(ProjectMember.project_id == project_id).all()}
+    results = []
+    for u in db.query(User).order_by(User.full_name, User.email).all():
+        if u.id in member_ids:
+            continue
+        if qf in _fold(u.full_name) or qf in _fold(u.email):
+            results.append({
+                "email": u.email,
+                "full_name": u.full_name or "",
+                "member_type": u.member_type,
+                "is_approved": bool(u.is_approved),
+                "is_active": bool(u.is_active),
+            })
+            if len(results) >= 8:
+                break
+    return JSONResponse({"results": results})
+
+
 @router.post("/projects/{project_id}/add-member")
 def add_member(project_id: int, request: Request, email: str = Form(...), db: Session = Depends(get_db)):
     user = _get_user(request, db)

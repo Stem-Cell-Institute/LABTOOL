@@ -137,10 +137,16 @@
 
         {% if can_manage_project %}
         <hr>
-        <form method="post" action="/projects/{{ project.id }}/add-member" class="d-flex gap-2">
-          <input type="email" name="email" class="form-control form-control-sm" placeholder="Email thành viên" required>
-          <button type="submit" class="btn btn-sm" style="background:#c2410c;color:#fff;">Thêm</button>
-        </form>
+        <div class="position-relative" id="addMemberWrap">
+          <form method="post" action="/projects/{{ project.id }}/add-member" class="d-flex gap-2" id="addMemberForm">
+            <input type="text" name="email" id="memberSearchInput" class="form-control form-control-sm"
+                   placeholder="Gõ tên hoặc email…" autocomplete="off" required>
+            <button type="submit" class="btn btn-sm" style="background:#c2410c;color:#fff;">Thêm</button>
+          </form>
+          <div id="memberSuggest" class="list-group position-absolute w-100 shadow"
+               style="z-index:1050;display:none;max-height:260px;overflow:auto;"></div>
+          <div class="form-text">Gõ tên (không cần dấu) hoặc email — hệ thống gợi ý tài khoản để chọn.</div>
+        </div>
         {% endif %}
       </div>
     </div>
@@ -163,4 +169,58 @@
     </div>
   </div>
 </div>
+
+{% if can_manage_project %}
+<script>
+(function () {
+  const input = document.getElementById('memberSearchInput');
+  const box   = document.getElementById('memberSuggest');
+  const form  = document.getElementById('addMemberForm');
+  const wrap  = document.getElementById('addMemberWrap');
+  if (!input) return;
+
+  let timer = null, ctrl = null;
+  const esc = s => (s || '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const typeLabel = t => t === 'student' ? 'Sinh viên' : (t === 'ncs' ? 'NCS' : 'NCV');
+  const hide = () => { box.style.display = 'none'; box.innerHTML = ''; };
+
+  input.addEventListener('input', function () {
+    const q = this.value.trim();
+    clearTimeout(timer);
+    if (q.length < 1) { hide(); return; }
+    timer = setTimeout(async () => {
+      if (ctrl) ctrl.abort();
+      ctrl = new AbortController();
+      try {
+        const r = await fetch('/projects/{{ project.id }}/search-users?q=' + encodeURIComponent(q), { signal: ctrl.signal });
+        if (!r.ok) { hide(); return; }
+        const d = await r.json();
+        if (!d.results || !d.results.length) {
+          box.innerHTML = '<div class="list-group-item small text-muted">Không tìm thấy tài khoản khớp.</div>';
+          box.style.display = 'block';
+          return;
+        }
+        box.innerHTML = d.results.map(u => {
+          let warn = '';
+          if (!u.is_active) warn = ' <span class="badge bg-secondary ms-1" style="font-size:.6rem;">Vô hiệu</span>';
+          else if (!u.is_approved) warn = ' <span class="badge bg-warning text-dark ms-1" style="font-size:.6rem;">Chưa duyệt</span>';
+          return '<button type="button" class="list-group-item list-group-item-action py-1" data-email="' + esc(u.email) + '">' +
+                   '<div class="fw-semibold small">' + esc(u.full_name || u.email) +
+                     '<span class="badge bg-light text-secondary border ms-1" style="font-size:.6rem;">' + typeLabel(u.member_type) + '</span>' + warn +
+                   '</div>' +
+                   '<div class="text-muted" style="font-size:.72rem;">' + esc(u.email) + '</div>' +
+                 '</button>';
+        }).join('');
+        box.style.display = 'block';
+        box.querySelectorAll('[data-email]').forEach(btn => {
+          btn.addEventListener('click', () => { input.value = btn.getAttribute('data-email'); hide(); form.submit(); });
+        });
+      } catch (e) { /* fetch bị huỷ khi gõ tiếp — bỏ qua */ }
+    }, 200);
+  });
+
+  document.addEventListener('click', e => { if (!wrap.contains(e.target)) hide(); });
+})();
+</script>
+{% endif %}
 {% endblock %}
