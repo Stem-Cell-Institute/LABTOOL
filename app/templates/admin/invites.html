@@ -74,9 +74,9 @@
               <span class="badge bg-info text-dark">NCV</span>
               {% endif %}
             </td>
-            <td class="text-muted">{{ inv.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+            <td class="text-muted">{{ inv.created_at | vn('%d/%m/%Y %H:%M') }}</td>
             <td class="text-muted">
-              {{ inv.expires_at.strftime('%d/%m/%Y') if inv.expires_at else '—' }}
+              {{ inv.expires_at | vn('%d/%m/%Y') if inv.expires_at else '—' }}
               {% if inv.expires_at and inv.expires_at < now %}<span class="badge bg-secondary ms-1">Hết hạn</span>{% endif %}
             </td>
             <td>
@@ -130,7 +130,7 @@
               <span class="badge bg-secondary">Đã huỷ</span>
               {% endif %}
             </td>
-            <td class="text-muted">{{ inv.accepted_at.strftime('%d/%m/%Y %H:%M') if inv.accepted_at else '—' }}</td>
+            <td class="text-muted">{{ inv.accepted_at | vn('%d/%m/%Y %H:%M') if inv.accepted_at else '—' }}</td>
           </tr>
           {% endfor %}
         </tbody>

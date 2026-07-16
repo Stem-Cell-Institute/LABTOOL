@@ -96,7 +96,7 @@
                 <i class="bi {{ meta[0] }}"></i>
               </span>
               <span class="small flex-grow-1">{{ entry.description }}</span>
-              <span class="text-muted" style="font-size:0.75rem; white-space:nowrap;">{{ entry.created_at.strftime('%d/%m %H:%M') }}</span>
+              <span class="text-muted" style="font-size:0.75rem; white-space:nowrap;">{{ entry.created_at | vn('%d/%m %H:%M') }}</span>
             </div>
           </div>
           {% endfor %}

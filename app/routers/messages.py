@@ -7,14 +7,13 @@ import unicodedata
 from datetime import datetime
 from fastapi import APIRouter, Request, Depends, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User, Conversation, ConversationMember, ChatMessage
 
 router = APIRouter(prefix="/messages")
-templates = Jinja2Templates(directory="app/templates")
+from app.templating import templates
 
 
 def _get_user(request: Request, db: Session):

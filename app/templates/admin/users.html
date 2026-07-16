@@ -63,7 +63,7 @@
               <span class="badge bg-light text-dark border">NCV</span>
               {% endif %}
             </td>
-            <td class="text-muted">{{ u.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+            <td class="text-muted">{{ u.created_at | vn('%d/%m/%Y %H:%M') }}</td>
             <td>
               <form method="post" action="/admin/users/{{ u.id }}/approve" class="d-flex gap-2 align-items-center">
                 <select name="group_id" class="form-select form-select-sm" style="width:160px;">
@@ -168,7 +168,7 @@
                 <span class="badge bg-secondary">Vô hiệu</span>
               {% endif %}
             </td>
-            <td class="text-muted small">{{ u.created_at.strftime('%d/%m/%Y') }}</td>
+            <td class="text-muted small">{{ u.created_at | vn('%d/%m/%Y') }}</td>
 
             <!-- Quick actions -->
             <td>

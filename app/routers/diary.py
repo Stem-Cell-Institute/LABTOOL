@@ -5,15 +5,15 @@ import difflib
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Request, Depends, Form, UploadFile, File, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User, Group, DailyLog, DailyLogFile, DailyLogRevision, SystemConfig, Project, ProjectMember, Notebook
 from app.activity import log_activity
+from app.timeutil import local_today, to_utc
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
+from app.templating import templates
 
 DIARY_UPLOAD_DIR = "uploads/diary"
 
@@ -101,6 +101,19 @@ def _can_attach_project(db: Session, project_id: int, user_id: int) -> bool:
     return bool(target_user and _can_manage(target_user))
 
 
+def diary_order(newest_first: bool):
+    """Thứ tự dòng thời gian: theo NGÀY THÍ NGHIỆM trước, rồi mới tới lúc ghi.
+    Dùng chung cho /diary, /diary/overview và trang project để 3 nơi luôn nhất quán."""
+    if newest_first:
+        return (DailyLog.experiment_date.desc(), DailyLog.created_at.desc())
+    return (DailyLog.experiment_date.asc(), DailyLog.created_at.asc())
+
+
+def _newest_first(sort: str) -> bool:
+    """?sort=old -> cũ nhất trước. Mặc định (không có tham số) là mới nhất trước."""
+    return sort != "old"
+
+
 def _fold(s: str) -> str:
     """Bỏ dấu + chữ thường để tìm kiếm không phân biệt hoa/thường và KHÔNG phân biệt dấu:
     gõ 'te bao goc' vẫn khớp 'tế bào gốc'. 'đ' không tự tách khi chuẩn hoá NFD nên thay tay."""
@@ -122,16 +135,25 @@ def _parse_date_only(raw: str):
 
 
 def _parse_exp_date(raw: str, now: datetime) -> datetime:
-    """Ngày thực hiện thí nghiệm từ form (YYYY-MM-DD). Rỗng/sai định dạng -> hôm nay.
-    KHÔNG cho chọn ngày tương lai — nhật ký là ghi việc đã làm, không phải kế hoạch."""
+    """Ngày thực hiện thí nghiệm từ form (YYYY-MM-DD, là ngày theo giờ ĐỊA PHƯƠNG của người
+    dùng). Rỗng/sai định dạng -> thời điểm hiện tại. KHÔNG cho chọn ngày tương lai — nhật ký
+    là ghi việc đã làm, không phải kế hoạch.
+
+    Trả về mốc UTC (như mọi cột thời gian khác) để lúc hiển thị quy đổi ngược lại ra đúng
+    ngày người dùng đã chọn.
+    """
+    from app.timeutil import to_utc, local_today
+
     raw = (raw or "").strip()
     if not raw:
         return now
     try:
-        d = datetime.strptime(raw, "%Y-%m-%d")
+        d = datetime.strptime(raw, "%Y-%m-%d")   # 00:00 ngày địa phương
     except ValueError:
         return now
-    return now if d.date() > now.date() else d
+    if d.date() > local_today():
+        return now
+    return to_utc(d)
 
 
 def _can_view(user: User, entry: DailyLog, db: Session) -> bool:
@@ -232,7 +254,8 @@ def _compute_diff(old: str, new: str):
 # ════════════════════════════════════════════════════════════════
 
 @router.get("/diary", response_class=HTMLResponse)
-def my_diary(request: Request, db: Session = Depends(get_db), q: str = "", from_date: str = "", to_date: str = ""):
+def my_diary(request: Request, db: Session = Depends(get_db), q: str = "",
+             from_date: str = "", to_date: str = "", sort: str = "new"):
     user = _get_user(request, db)
     if not user:
         return RedirectResponse("/login", status_code=302)
@@ -243,12 +266,14 @@ def my_diary(request: Request, db: Session = Depends(get_db), q: str = "", from_
     # Lọc theo khoảng NGÀY LÀM THÍ NGHIỆM (làm ở SQL cho nhẹ)
     d_from = _parse_date_only(from_date)
     d_to = _parse_date_only(to_date)
+    # Người dùng chọn ngày theo giờ địa phương, còn cột lưu UTC -> phải quy đổi mốc lọc,
+    # nếu không sẽ lệch 7 tiếng ở hai đầu khoảng (lọt/sót bản ghi ghi vào sáng sớm hay tối muộn).
     if d_from:
-        query = query.filter(DailyLog.experiment_date >= d_from)
+        query = query.filter(DailyLog.experiment_date >= to_utc(d_from))
     if d_to:
-        query = query.filter(DailyLog.experiment_date < d_to + timedelta(days=1))
+        query = query.filter(DailyLog.experiment_date < to_utc(d_to + timedelta(days=1)))
 
-    entries = query.order_by(DailyLog.experiment_date.desc(), DailyLog.created_at.desc()).all()
+    entries = query.order_by(*diary_order(_newest_first(sort))).all()
 
     # Tìm chữ: lọc bằng Python để KHÔNG phân biệt dấu (gõ "te bao" vẫn ra "tế bào").
     # SQLite không có sẵn so sánh bỏ dấu; số bản ghi mỗi người ở mức vài trăm nên hoàn toàn ổn.
@@ -337,10 +362,12 @@ def export_my_diary(request: Request, db: Session = Depends(get_db),
     query = db.query(DailyLog).filter(DailyLog.user_id == user.id)
     d_from = _parse_date_only(from_date)
     d_to = _parse_date_only(to_date)
+    # Người dùng chọn ngày theo giờ địa phương, còn cột lưu UTC -> phải quy đổi mốc lọc,
+    # nếu không sẽ lệch 7 tiếng ở hai đầu khoảng (lọt/sót bản ghi ghi vào sáng sớm hay tối muộn).
     if d_from:
-        query = query.filter(DailyLog.experiment_date >= d_from)
+        query = query.filter(DailyLog.experiment_date >= to_utc(d_from))
     if d_to:
-        query = query.filter(DailyLog.experiment_date < d_to + timedelta(days=1))
+        query = query.filter(DailyLog.experiment_date < to_utc(d_to + timedelta(days=1)))
     entries = query.order_by(DailyLog.experiment_date.asc(), DailyLog.created_at.asc()).all()
 
     qf = _fold(q.strip())
@@ -387,7 +414,7 @@ def new_entry_form(request: Request, db: Session = Depends(get_db), attach_to: s
         "user": user, "entry": None, "locked": False, "lock_days": _lock_days(db),
         "my_projects": _my_projects(db, user.id), "my_notebooks": _my_notebooks(db, user.id),
         "preselect": preselect,
-        "today_str": datetime.utcnow().strftime("%Y-%m-%d"),
+        "today_str": local_today().strftime("%Y-%m-%d"),
     })
 
 
@@ -409,7 +436,7 @@ def edit_entry_form(log_id: int, request: Request, db: Session = Depends(get_db)
     return templates.TemplateResponse(request, "diary/form.html", {
         "user": user, "entry": entry, "locked": False, "lock_days": lock_days,
         "my_projects": _my_projects(db, entry.user_id), "my_notebooks": _my_notebooks(db, entry.user_id),
-        "today_str": datetime.utcnow().strftime("%Y-%m-%d"),
+        "today_str": local_today().strftime("%Y-%m-%d"),
     })
 
 
@@ -593,6 +620,7 @@ def diary_overview(
     group_id: int = None,
     user_id: int = None,
     q: str = "",
+    sort: str = "new",
 ):
     user = _get_user(request, db)
     if not user:
@@ -627,7 +655,7 @@ def diary_overview(
                   Notebook.topic_name.ilike(like),
               ))
         )
-    entries = query.order_by(DailyLog.experiment_date.desc(), DailyLog.created_at.desc()).limit(300).all()
+    entries = query.order_by(*diary_order(_newest_first(sort))).limit(300).all()
 
     if group_id:
         members = db.query(User).filter(User.group_id == group_id, User.is_active == True).order_by(User.full_name).all()

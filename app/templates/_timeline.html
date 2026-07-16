@@ -31,13 +31,32 @@
 .exp-tl .tl-badge{display:inline-block;font-size:.68rem;padding:.12rem .5rem;border-radius:20px;text-decoration:none}
 </style>
 
+{# Chiều sắp xếp lấy từ ?sort= của chính trang đang xem (mặc định: mới nhất trước).
+   Nút đảo chiều giữ nguyên mọi tham số khác (bộ lọc, tìm kiếm) nhờ include_query_params. #}
+{% set tl_newest_first = request.query_params.get('sort', 'new') != 'old' %}
+<div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
+  <span class="small fw-semibold text-secondary">
+    {% if tl_newest_first %}
+      <i class="bi bi-sort-down me-1"></i>Mới nhất trước
+      <span class="text-muted fw-normal">— đọc từ trên xuống là lùi về quá khứ</span>
+    {% else %}
+      <i class="bi bi-sort-up me-1"></i>Cũ nhất trước
+      <span class="text-muted fw-normal">— đọc từ trên xuống là tiến theo diễn tiến thí nghiệm</span>
+    {% endif %}
+  </span>
+  <a href="{{ request.url.include_query_params(sort='old' if tl_newest_first else 'new') }}"
+     class="btn btn-sm btn-outline-secondary py-0 px-2">
+    <i class="bi bi-arrow-down-up me-1"></i>Đảo chiều
+  </a>
+</div>
+
 <div class="exp-tl">
   {% set ns = namespace(day=None) %}
   {% for e in tl_entries %}
     {# Nhóm theo NGÀY LÀM THÍ NGHIỆM (log_date), không phải ngày bấm lưu #}
-    {% set d = e.log_date.strftime('%d/%m/%Y') %}
+    {% set d = e.log_date | vn('%d/%m/%Y') %}
     {% if d != ns.day %}{% set ns.day = d %}
-    <div class="tl-day"><span><i class="bi bi-calendar3 me-1"></i>{{ d }}</span></div>
+    <div class="tl-day"><span><i class="bi bi-calendar3 me-1"></i>{{ e.day_label }}</span></div>
     {% endif %}
     <div class="tl-item">
       <div class="tl-dot"></div>
@@ -49,11 +68,11 @@
            onkeydown="if(event.key==='Enter'){location.href='/diary/{{ e.id }}'}">
         <div class="d-flex justify-content-between align-items-start gap-2">
           <div class="flex-grow-1">
-            <span class="tl-time" title="Thời điểm ghi nhật ký"><i class="bi bi-clock me-1"></i>{{ e.created_at.strftime('%H:%M') }}</span>
+            <span class="tl-time" title="Thời điểm ghi nhật ký"><i class="bi bi-clock me-1"></i>{{ e.created_at | vn('%H:%M') }}</span>
             {% if e.logged_late_days %}
             {# Ghi sau ngày làm — nêu rõ để người đọc tự đánh giá độ tin cậy của ghi chép #}
             <span class="tl-badge bg-warning-subtle text-warning-emphasis border border-warning-subtle ms-1"
-                  title="Thí nghiệm làm ngày {{ e.log_date.strftime('%d/%m/%Y') }}, nhưng {{ e.created_at.strftime('%d/%m/%Y') }} mới ghi">
+                  title="Thí nghiệm làm ngày {{ e.log_date | vn('%d/%m/%Y') }}, nhưng {{ e.created_at | vn('%d/%m/%Y') }} mới ghi">
               <i class="bi bi-clock-history me-1"></i>ghi muộn {{ e.logged_late_days }} ngày
             </span>
             {% endif %}
@@ -84,7 +103,9 @@
             {% if tl_is_locked(e) %}
             <span class="tl-badge bg-secondary text-white"><i class="bi bi-lock-fill me-1"></i>Đã khoá</span>
             {% else %}
-            <span class="tl-badge bg-success text-white"><i class="bi bi-unlock-fill me-1"></i>Còn sửa được</span>
+            {# Xanh DƯƠNG nhạt, không dùng xanh lá: cả đường thời gian, chấm mốc và nhãn ngày
+               đều đã xanh lá — badge xanh lá nữa sẽ chìm vào nền và làm rối mắt. #}
+            <span class="tl-badge bg-info-subtle text-info-emphasis border border-info-subtle"><i class="bi bi-unlock-fill me-1"></i>Còn sửa được</span>
             {% endif %}
           {% endif %}
         </div>

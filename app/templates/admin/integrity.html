@@ -50,7 +50,7 @@
   <div class="card-body p-0"><table class="table table-sm mb-0">
     <thead class="table-light"><tr><th>Mắt xích #</th><th>Nhật ký</th><th>Ghi lúc</th></tr></thead>
     <tbody>{% for c in r.chain_breaks %}<tr>
-      <td>{{ c.seq }}</td><td>#{{ c.log_id }}</td><td class="text-muted small">{{ c.at.strftime('%H:%M %d/%m/%Y') }}</td>
+      <td>{{ c.seq }}</td><td>#{{ c.log_id }}</td><td class="text-muted small">{{ c.at | vn('%H:%M %d/%m/%Y') }}</td>
     </tr>{% endfor %}</tbody>
   </table></div>
   <div class="card-footer small text-muted">Có người đã sửa hoặc xoá chính bản ghi chuỗi trong database.</div>
@@ -64,7 +64,7 @@
     <thead class="table-light"><tr><th>ID</th><th>Tiêu đề</th><th>Tác giả</th><th>Mắt xích gần nhất</th><th></th></tr></thead>
     <tbody>{% for m in r.modified %}<tr>
       <td>#{{ m.log_id }}</td><td>{{ m.title }}</td><td>{{ m.author }}</td>
-      <td class="text-muted small">{{ m.recorded_at.strftime('%H:%M %d/%m/%Y') }}</td>
+      <td class="text-muted small">{{ m.recorded_at | vn('%H:%M %d/%m/%Y') }}</td>
       <td><a href="/diary/{{ m.log_id }}" class="btn btn-sm btn-outline-primary">Xem</a></td>
     </tr>{% endfor %}</tbody>
   </table></div>
@@ -78,7 +78,7 @@
   <div class="card-body p-0"><table class="table table-sm mb-0">
     <thead class="table-light"><tr><th>ID</th><th>Sự kiện cuối</th><th>Lúc</th></tr></thead>
     <tbody>{% for v in r.vanished %}<tr>
-      <td>#{{ v.log_id }}</td><td>{{ v.last_event }}</td><td class="text-muted small">{{ v.at.strftime('%H:%M %d/%m/%Y') }}</td>
+      <td>#{{ v.log_id }}</td><td>{{ v.last_event }}</td><td class="text-muted small">{{ v.at | vn('%H:%M %d/%m/%Y') }}</td>
     </tr>{% endfor %}</tbody>
   </table></div>
   <div class="card-footer small text-muted">Có mắt xích chứng minh nhật ký từng tồn tại, nhưng nay không còn trong DB và không có thao tác xoá hợp lệ nào.</div>
@@ -92,7 +92,7 @@
     <thead class="table-light"><tr><th>ID</th><th>Tiêu đề</th><th>Tác giả</th><th>Tạo lúc</th></tr></thead>
     <tbody>{% for u in r.unrecorded %}<tr>
       <td>#{{ u.log_id }}</td><td>{{ u.title }}</td><td>{{ u.author }}</td>
-      <td class="text-muted small">{{ u.created_at.strftime('%H:%M %d/%m/%Y') }}</td>
+      <td class="text-muted small">{{ u.created_at | vn('%H:%M %d/%m/%Y') }}</td>
     </tr>{% endfor %}</tbody>
   </table></div>
   <div class="card-footer small text-muted">Nhật ký có trong DB nhưng chưa từng đi qua ứng dụng — dấu hiệu bị chèn thẳng bằng SQL.</div>
@@ -104,7 +104,7 @@
   <div class="card-body">
     {% if r.latest_hash %}
     <code class="user-select-all d-block p-2 bg-light rounded" style="word-break:break-all;">{{ r.latest_hash }}</code>
-    <div class="small text-muted mt-1">Mắt xích cuối ghi lúc {{ r.latest_at.strftime('%H:%M %d/%m/%Y') }}.</div>
+    <div class="small text-muted mt-1">Mắt xích cuối ghi lúc {{ r.latest_at | vn('%H:%M %d/%m/%Y') }}.</div>
     {% else %}
     <div class="text-muted small">Chuỗi còn rỗng — chưa có nhật ký nào.</div>
     {% endif %}

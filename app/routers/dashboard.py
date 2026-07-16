@@ -2,14 +2,13 @@ from calendar import monthrange
 from datetime import datetime
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, distinct
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User, Video, ExperimentLog, Group, MonthlyReport, DailyLog
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
+from app.templating import templates
 
 MONTH_VI = ["", "Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6",
             "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"]

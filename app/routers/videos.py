@@ -3,7 +3,6 @@ import re
 import threading
 from fastapi import APIRouter, Request, Depends, UploadFile, File, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from app.database import get_db, SessionLocal
 from app.models import User, Video, ExperimentLog, Group
@@ -11,7 +10,7 @@ from app import gemini as gem
 from app.activity import log_activity
 
 router = APIRouter(prefix="/videos")
-templates = Jinja2Templates(directory="app/templates")
+from app.templating import templates
 
 UPLOAD_DIR = "uploads"
 MAX_UPLOAD_MB = 500

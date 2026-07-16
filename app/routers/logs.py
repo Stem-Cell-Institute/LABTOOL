@@ -3,14 +3,13 @@ import threading
 from datetime import datetime
 from fastapi import APIRouter, Request, Depends, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, Response, JSONResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from app.database import get_db, SessionLocal
 from app.models import User, ExperimentLog, Video, Group, VideoQuestion
 
 router = APIRouter(prefix="/logs")
-templates = Jinja2Templates(directory="app/templates")
+from app.templating import templates
 
 
 def _get_user(request: Request, db: Session):

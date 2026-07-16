@@ -31,7 +31,7 @@
               {% for e in logs %}
               <tr>
                 <td>{{ e.title or ('Nhật ký #' ~ e.id) }}</td>
-                <td class="text-muted small">{{ e.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                <td class="text-muted small">{{ e.created_at | vn('%d/%m/%Y %H:%M') }}</td>
                 <td><a href="/diary/{{ e.id }}" class="btn btn-sm btn-outline-secondary">Xem</a></td>
               </tr>
               {% endfor %}

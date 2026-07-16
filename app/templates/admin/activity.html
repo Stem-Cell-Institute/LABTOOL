@@ -67,7 +67,7 @@
         <tbody>
           {% set prev_date = namespace(val="") %}
           {% for entry in logs %}
-          {% set date_str = entry.created_at.strftime('%d/%m/%Y') %}
+          {% set date_str = entry.created_at | vn('%d/%m/%Y') %}
           {% if date_str != prev_date.val %}
           {% set prev_date.val = date_str %}
           <tr class="table-secondary">
@@ -79,7 +79,7 @@
 
           {% set meta = action_meta.get(entry.action, ("bi-circle", "secondary", entry.action)) %}
           <tr>
-            <td class="text-muted">{{ entry.created_at.strftime('%H:%M:%S') }}</td>
+            <td class="text-muted">{{ entry.created_at | vn('%H:%M:%S') }}</td>
             <td>
               <span class="badge bg-{{ meta[1] }} bg-opacity-15 text-{{ meta[1] }} border border-{{ meta[1] }} border-opacity-25">
                 <i class="bi {{ meta[0] }} me-1"></i>{{ meta[2] }}

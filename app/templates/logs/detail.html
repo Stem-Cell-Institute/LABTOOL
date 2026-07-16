@@ -23,7 +23,7 @@
           {% endif %}
           <small class="text-muted">
             <i class="bi bi-robot me-1"></i>{{ log.ai_model }} &nbsp;|&nbsp;
-            <i class="bi bi-calendar3 me-1"></i>{{ log.created_at.strftime('%d/%m/%Y %H:%M') }} &nbsp;|&nbsp;
+            <i class="bi bi-calendar3 me-1"></i>{{ log.created_at | vn('%d/%m/%Y %H:%M') }} &nbsp;|&nbsp;
             <i class="bi bi-camera-video me-1"></i>
             <a href="/videos/{{ log.video.id }}" class="text-muted">{{ log.video.original_name }}</a>
             &nbsp;|&nbsp;
@@ -83,7 +83,7 @@
                 <span class="fw-semibold small text-primary">
                   {{ vq.asker.full_name or vq.asker.email if vq.asker else 'Người dùng' }}
                 </span>
-                <span class="text-muted small ms-2">{{ vq.created_at.strftime('%d/%m/%Y %H:%M') }}</span>
+                <span class="text-muted small ms-2">{{ vq.created_at | vn('%d/%m/%Y %H:%M') }}</span>
                 <div class="mt-1">{{ vq.question }}</div>
               </div>
             </div>
@@ -129,7 +129,7 @@
             <div class="d-flex justify-content-between align-items-start">
               <strong class="small">{{ c.author.full_name or c.author.email }}</strong>
               <div class="d-flex align-items-center gap-1">
-                <small class="text-muted">{{ c.created_at.strftime('%d/%m %H:%M') }}</small>
+                <small class="text-muted">{{ c.created_at | vn('%d/%m %H:%M') }}</small>
                 {% if user.role == 'admin' or user.id == c.user_id %}
                 <form method="post" action="/comments/{{ c.id }}/delete" class="d-inline">
                   <button type="submit" class="btn btn-link btn-sm p-0 text-danger" title="Xóa"

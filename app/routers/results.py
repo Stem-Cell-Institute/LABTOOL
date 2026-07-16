@@ -9,14 +9,13 @@ from PIL import Image
 from datetime import datetime
 from fastapi import APIRouter, Request, Depends, Form, UploadFile, File, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.database import get_db, SessionLocal
 from app.models import User, Group, MonthlyReport, ReportFile, SystemConfig, ReportPeriod, AICalibrationExample
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
+from app.templating import templates
 
 RESULT_UPLOAD_DIR = "uploads/results"
 ALLOWED_EXT = {".png", ".jpg", ".jpeg", ".gif", ".tiff", ".bmp",

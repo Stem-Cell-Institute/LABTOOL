@@ -17,7 +17,7 @@
         <p class="text-muted small mb-0">
           Nhóm: <strong>{{ video.group.name }}</strong> &nbsp;|&nbsp;
           Upload bởi: <strong>{{ video.uploader.full_name or video.uploader.email }}</strong> &nbsp;|&nbsp;
-          {{ video.uploaded_at.strftime('%d/%m/%Y %H:%M') }} &nbsp;|&nbsp;
+          {{ video.uploaded_at | vn('%d/%m/%Y %H:%M') }} &nbsp;|&nbsp;
           {{ "%.1f"|format(video.file_size/1048576) }} MB
         </p>
       </div>

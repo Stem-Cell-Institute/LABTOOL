@@ -57,7 +57,7 @@
                 <span class="badge bg-light text-dark">Upload</span>
               {% endif %}
             </td>
-            <td class="text-muted">{{ v.uploaded_at.strftime('%d/%m/%Y %H:%M') }}</td>
+            <td class="text-muted">{{ v.uploaded_at | vn('%d/%m/%Y %H:%M') }}</td>
             <td>
               <span class="text-danger small" title="{{ v.error_message }}">
                 {{ (v.error_message or 'Không rõ')[:80] }}{% if v.error_message and v.error_message|length > 80 %}...{% endif %}
@@ -103,7 +103,7 @@
           <tr>
             <td><a href="/videos/{{ v.id }}" class="text-dark text-decoration-none"><i class="bi bi-hourglass-split text-warning me-1"></i>{{ v.original_name }}</a></td>
             <td><span class="badge bg-secondary">{{ v.group.name }}</span></td>
-            <td class="text-muted">{{ v.uploaded_at.strftime('%d/%m/%Y %H:%M') }}</td>
+            <td class="text-muted">{{ v.uploaded_at | vn('%d/%m/%Y %H:%M') }}</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -132,7 +132,7 @@
           <tr>
             <td><a href="/videos/{{ v.id }}" class="text-dark text-decoration-none"><i class="bi bi-clock text-muted me-1"></i>{{ v.original_name }}</a></td>
             <td><span class="badge bg-secondary">{{ v.group.name }}</span></td>
-            <td class="text-muted">{{ v.uploaded_at.strftime('%d/%m/%Y %H:%M') }}</td>
+            <td class="text-muted">{{ v.uploaded_at | vn('%d/%m/%Y %H:%M') }}</td>
           </tr>
           {% endfor %}
         </tbody>

@@ -2,13 +2,12 @@
 from datetime import datetime
 from fastapi import APIRouter, Request, Depends, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User, Notebook, DailyLog
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
+from app.templating import templates
 
 
 def _get_user(request: Request, db: Session):

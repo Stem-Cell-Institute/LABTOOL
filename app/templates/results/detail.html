@@ -28,7 +28,7 @@
           <span><i class="bi bi-people me-1 text-muted"></i>{{ report.group.name }}</span>
           <span><i class="bi bi-calendar3 me-1 text-muted"></i>{{ months[report.report_month] }}/{{ report.report_year }}</span>
           {% if report.submitted_at %}
-          <span><i class="bi bi-send me-1 text-muted"></i>Nộp: {{ report.submitted_at.strftime('%d/%m/%Y %H:%M') }}</span>
+          <span><i class="bi bi-send me-1 text-muted"></i>Nộp: {{ report.submitted_at | vn('%d/%m/%Y %H:%M') }}</span>
           {% endif %}
           <span>
             {% if report.status == 'draft' %}
@@ -188,7 +188,7 @@
         {% endif %}
         <div class="text-muted small">
           Duyệt bởi: {{ report.reviewer.full_name or report.reviewer.email if report.reviewer else '—' }}
-          <br>{{ report.reviewed_at.strftime('%d/%m/%Y %H:%M') if report.reviewed_at else '' }}
+          <br>{{ report.reviewed_at | vn('%d/%m/%Y %H:%M') if report.reviewed_at else '' }}
         </div>
         <hr>
         <p class="small text-muted mb-2">Cập nhật quyết định:</p>

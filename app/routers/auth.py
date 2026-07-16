@@ -1,7 +1,6 @@
 import re
 from fastapi import APIRouter, Request, Depends, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User, PasswordResetRequest, UserInvite
@@ -16,7 +15,7 @@ from app.security import (
 )
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
+from app.templating import templates
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 

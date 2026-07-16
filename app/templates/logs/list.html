@@ -60,7 +60,7 @@
         </h6>
         <p class="text-muted small mb-2">
           <i class="bi bi-people me-1"></i>{{ log.video.group.name }} &nbsp;|&nbsp;
-          <i class="bi bi-calendar3 me-1"></i>{{ log.created_at.strftime('%d/%m/%Y') }}
+          <i class="bi bi-calendar3 me-1"></i>{{ log.created_at | vn('%d/%m/%Y') }}
         </p>
         <p class="small text-muted mb-3" style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">
           {{ log.content[:250] }}

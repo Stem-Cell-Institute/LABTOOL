@@ -3,7 +3,6 @@ import logging
 import threading
 from fastapi import APIRouter, Request, Depends, Form, HTTPException, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from app.database import get_db, SessionLocal
 from app.models import User, Group, Video, ExperimentLog, SystemConfig, ReportPeriod, MonthlyReport, AICalibrationExample, PasswordResetRequest, UserInvite
@@ -13,7 +12,7 @@ from app.activity import log_activity
 from app.security import generate_temp_password, generate_invite_token
 
 router = APIRouter(prefix="/admin")
-templates = Jinja2Templates(directory="app/templates")
+from app.templating import templates
 logger = logging.getLogger(__name__)
 
 ALLOWED_EXT = {".mp4", ".mov", ".avi", ".mkv", ".webm"}

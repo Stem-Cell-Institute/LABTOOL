@@ -2,13 +2,12 @@
 import threading
 from fastapi import APIRouter, Request, Depends, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from app.database import get_db, SessionLocal
 from app.models import User, DailyLog, DiaryAIQuestion
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
+from app.templating import templates
 
 MAX_ENTRIES = 500  # số nhật ký gần nhất đưa vào ngữ cảnh khi tổng hợp
 

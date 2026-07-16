@@ -60,7 +60,7 @@
                 </div>
                 {% endfor %}
               </div>
-              <small class="text-muted text-nowrap">{{ uvids[0].uploaded_at.strftime('%d/%m') if uvids else '' }}</small>
+              <small class="text-muted text-nowrap">{{ uvids[0].uploaded_at | vn('%d/%m') if uvids else '' }}</small>
             </div>
           </div>
           {% else %}

@@ -35,9 +35,9 @@
 
         <div class="text-muted small mb-2">
           {% if r.submitted_at %}
-            <i class="bi bi-send me-1"></i>Nộp lúc {{ r.submitted_at.strftime('%d/%m/%Y %H:%M') }}
+            <i class="bi bi-send me-1"></i>Nộp lúc {{ r.submitted_at | vn('%d/%m/%Y %H:%M') }}
           {% else %}
-            <i class="bi bi-pencil me-1"></i>Cập nhật {{ r.updated_at.strftime('%d/%m/%Y') }}
+            <i class="bi bi-pencil me-1"></i>Cập nhật {{ r.updated_at | vn('%d/%m/%Y') }}
           {% endif %}
         </div>
 

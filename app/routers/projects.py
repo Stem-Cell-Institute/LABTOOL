@@ -2,7 +2,6 @@
 from datetime import datetime
 from fastapi import APIRouter, Request, Depends, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import (User, Project, ProjectMember, DailyLog, ProjectMessage,
@@ -10,7 +9,7 @@ from app.models import (User, Project, ProjectMember, DailyLog, ProjectMessage,
 from app.activity import log_activity
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
+from app.templating import templates
 
 
 def _get_user(request: Request, db: Session):
@@ -596,7 +595,7 @@ def export_project_diary(project_id: int, request: Request, db: Session = Depend
 
 
 @router.get("/projects/{project_id}", response_class=HTMLResponse)
-def view_project(project_id: int, request: Request, db: Session = Depends(get_db)):
+def view_project(project_id: int, request: Request, db: Session = Depends(get_db), sort: str = "new"):
     user = _get_user(request, db)
     if not user:
         return RedirectResponse("/login", status_code=302)
@@ -626,10 +625,11 @@ def view_project(project_id: int, request: Request, db: Session = Depends(get_db
     # xem được phép xem (chủ project cha thấy hết nhánh dưới; thành viên thường chỉ thấy nhánh
     # mình tham gia) — không lộ nhật ký nhánh mà họ vốn không có quyền xem.
     timeline_ids = _timeline_project_ids(db, user, project_id)
+    from app.routers.diary import diary_order, _newest_first
     timeline_logs = (
         db.query(DailyLog)
           .filter(DailyLog.project_id.in_(timeline_ids))
-          .order_by(DailyLog.experiment_date.desc(), DailyLog.created_at.desc())
+          .order_by(*diary_order(_newest_first(sort)))
           .limit(300)
           .all()
     )

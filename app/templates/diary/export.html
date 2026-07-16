@@ -53,9 +53,12 @@
     <div class="sub">{{ doc_subtitle }}</div>
     <div class="meta-row">
       Người kết xuất: <strong>{{ user.full_name or user.email }}</strong>
-      · Xuất lúc: {{ exported_at.strftime('%H:%M %d/%m/%Y') }}
+      · Xuất lúc: {{ exported_at | vn('%H:%M %d/%m/%Y') }}
       · Số bản ghi: <strong>{{ entries|length }}</strong>
       {% if range_label %} · Khoảng: {{ range_label }}{% endif %}
+      {# Bản in cố tình xếp cũ → mới (đọc như sổ tay giấy), NGƯỢC với mặc định trên web —
+         nên phải nói rõ ra, tránh người đọc tưởng bị sắp xếp sai. #}
+      · Thứ tự: <strong>cũ → mới</strong> (theo ngày thực hiện)
     </div>
   </div>
 
@@ -64,11 +67,11 @@
   {% else %}
     {% for e in entries %}
     <div class="entry">
-      <div class="entry-date">{{ e.log_date.strftime('%d/%m/%Y') }}</div>
+      <div class="entry-date">{{ e.log_date | vn('%d/%m/%Y') }}</div>
       <div class="entry-title">{{ e.title or ('Nhật ký #' ~ e.id) }}</div>
       <div class="entry-meta">
         {% if show_author %}Người thực hiện: <strong>{{ e.author.full_name or e.author.email }}</strong> · {% endif %}
-        Ghi lúc: {{ e.created_at.strftime('%H:%M %d/%m/%Y') }}
+        Ghi lúc: {{ e.created_at | vn('%H:%M %d/%m/%Y') }}
         {% if e.logged_late_days %}<span class="late">ghi muộn {{ e.logged_late_days }} ngày</span>{% endif %}
         {% if e.project %} · Project: {{ e.project.full_path_name }}{% elif e.notebook %} · Sổ tay: {{ e.notebook.topic_name }}{% endif %}
       </div>

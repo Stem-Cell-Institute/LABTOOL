@@ -42,7 +42,7 @@
               <tr>
                 <td class="fw-semibold">{{ r.author.full_name or r.author.email }}</td>
                 <td><span class="badge bg-secondary">{{ r.group.name }}</span></td>
-                <td class="text-muted">{{ r.submitted_at.strftime('%d/%m %H:%M') if r.submitted_at else '—' }}</td>
+                <td class="text-muted">{{ r.submitted_at | vn('%d/%m %H:%M') if r.submitted_at else '—' }}</td>
                 <td>
                   {% if r.ai_status == 'done' and r.ai_verdict %}
                     {% set av = verdict_label.get(r.ai_verdict, ('?','secondary')) %}

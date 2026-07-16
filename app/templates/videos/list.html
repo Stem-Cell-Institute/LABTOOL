@@ -63,7 +63,7 @@
                 <span class="badge bg-secondary" data-video-id="{{ v.id }}"><i class="bi bi-clock me-1"></i>Chờ xử lý</span>
               {% endif %}
             </td>
-            <td class="text-muted small">{{ v.uploaded_at.strftime('%d/%m/%Y %H:%M') }}</td>
+            <td class="text-muted small">{{ v.uploaded_at | vn('%d/%m/%Y %H:%M') }}</td>
             <td>
               {% if v.log %}
                 <a href="/logs/{{ v.log.id }}" class="btn btn-sm btn-outline-primary">

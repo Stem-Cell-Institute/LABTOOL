@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy import (
     Column, Integer, String, Text, DateTime, Boolean,
     ForeignKey, BigInteger, UniqueConstraint,
@@ -467,10 +467,26 @@ class DailyLog(Base):
 
     @property
     def logged_late_days(self) -> int:
-        """Số ngày ghi muộn so với ngày làm thí nghiệm (0 nếu ghi trong ngày)."""
+        """Số ngày ghi muộn so với ngày làm thí nghiệm (0 nếu ghi trong ngày).
+        So theo NGÀY ĐỊA PHƯƠNG: cả 2 mốc lưu bằng UTC, nếu so ngày UTC thì việc ghi lúc
+        7-12h tối giờ VN đã sang ngày UTC khác -> báo 'ghi muộn 1 ngày' oan."""
         if not self.experiment_date:
             return 0
-        return max(0, (self.created_at.date() - self.experiment_date.date()).days)
+        from app.timeutil import local_date
+        return max(0, (local_date(self.created_at) - local_date(self.experiment_date)).days)
+
+    @property
+    def day_label(self) -> str:
+        """Nhãn ngày cho dòng thời gian — kèm 'Hôm nay/Hôm qua' để định vị nhanh, nhưng LUÔN
+        giữ ngày cụ thể bên cạnh để không mơ hồ khi in ra hay đọc lại sau này."""
+        from app.timeutil import local_date, local_today
+        d = local_date(self.log_date)
+        today = local_today()
+        if d == today:
+            return f"Hôm nay — {d.strftime('%d/%m/%Y')}"
+        if d == today - timedelta(days=1):
+            return f"Hôm qua — {d.strftime('%d/%m/%Y')}"
+        return d.strftime("%d/%m/%Y")
 
     author      = relationship("User", foreign_keys=[user_id])
     last_editor = relationship("User", foreign_keys=[updated_by])
