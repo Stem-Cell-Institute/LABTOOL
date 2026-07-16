@@ -5,7 +5,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import User, Project, ProjectMember, DailyLog, ProjectMessage, ProjectChatRead
+from app.models import (User, Project, ProjectMember, DailyLog, ProjectMessage,
+                        ProjectChatRead, ProjectDiaryRead)
 from app.activity import log_activity
 
 router = APIRouter()
@@ -55,6 +56,47 @@ def _can_view_project(user: User, project: Project, db: Session) -> bool:
         or _is_member(db, project.id, user.id)
         or _is_ancestor_owner(db, project, user.id)
     )
+
+
+def _timeline_project_ids(db: Session, user: User, project_id: int) -> list[int]:
+    """Các project mà dòng thời gian của trang project_id được phép gộp: chính nó + các nhánh
+    con mà NGƯỜI ĐANG XEM có quyền xem. Dùng chung cho timeline, bản in và đếm nhật ký mới,
+    để badge luôn khớp đúng thứ họ thực sự nhìn thấy."""
+    ids = [project_id]
+    for cid in _descendant_project_ids(db, project_id):
+        sub = db.get(Project, cid)
+        if sub and _can_view_project(user, sub, db):
+            ids.append(cid)
+    return ids
+
+
+def _diary_unread(db: Session, user: User, project_id: int) -> int:
+    """Số nhật ký mới trong project (gồm nhánh con xem được) mà người này chưa xem.
+    Không tính nhật ký do chính họ viết — tự mình ghi thì không phải 'tin mới'."""
+    from sqlalchemy import func
+    rd = db.query(ProjectDiaryRead).filter_by(project_id=project_id, user_id=user.id).first()
+    last_read = rd.last_read_id if rd else 0
+    ids = _timeline_project_ids(db, user, project_id)
+    return (db.query(func.count(DailyLog.id))
+              .filter(DailyLog.project_id.in_(ids),
+                      DailyLog.id > last_read,
+                      DailyLog.user_id != user.id).scalar()) or 0
+
+
+def _mark_diary_read(db: Session, user: User, project_id: int):
+    """Đánh dấu đã xem tới nhật ký mới nhất — gọi khi user mở trang project (timeline hiện ngay
+    trên đó nên coi như đã thấy)."""
+    ids = _timeline_project_ids(db, user, project_id)
+    latest = (db.query(DailyLog.id).filter(DailyLog.project_id.in_(ids))
+                .order_by(DailyLog.id.desc()).first())
+    if not latest:
+        return
+    rd = db.query(ProjectDiaryRead).filter_by(project_id=project_id, user_id=user.id).first()
+    if rd:
+        rd.last_read_id = max(rd.last_read_id or 0, latest[0])
+    else:
+        db.add(ProjectDiaryRead(project_id=project_id, user_id=user.id, last_read_id=latest[0]))
+    db.commit()
 
 
 def _descendant_project_ids(db: Session, root_id: int) -> list[int]:
@@ -119,9 +161,14 @@ def my_projects(request: Request, db: Session = Depends(get_db)):
     )
     projects = [m.project for m in memberships]
 
+    # Badge "có nhật ký mới" cho từng project — để thấy ngay project nào có việc mới mà không
+    # phải mở lần lượt từng cái.
+    diary_unread = {p.id: _diary_unread(db, user, p.id) for p in projects}
+
     flash = request.session.pop("flash", None)
     return templates.TemplateResponse(request, "projects/list.html", {
         "user": user, "flash": flash, "projects": projects,
+        "diary_unread": diary_unread,
         "can_create_project": _can_create_project(user),
     })
 
@@ -578,11 +625,7 @@ def view_project(project_id: int, request: Request, db: Session = Depends(get_db
     # Timeline tổng quan: gộp nhật ký của project NÀY + các đề tài nhánh con mà người đang
     # xem được phép xem (chủ project cha thấy hết nhánh dưới; thành viên thường chỉ thấy nhánh
     # mình tham gia) — không lộ nhật ký nhánh mà họ vốn không có quyền xem.
-    timeline_ids = [project_id]
-    for cid in _descendant_project_ids(db, project_id):
-        sub = db.get(Project, cid)
-        if sub and _can_view_project(user, sub, db):
-            timeline_ids.append(cid)
+    timeline_ids = _timeline_project_ids(db, user, project_id)
     timeline_logs = (
         db.query(DailyLog)
           .filter(DailyLog.project_id.in_(timeline_ids))
@@ -601,12 +644,18 @@ def view_project(project_id: int, request: Request, db: Session = Depends(get_db
     has_children = db.query(Project.id).filter(Project.parent_id == project.id).first() is not None
     can_log_here = _is_member(db, project.id, user.id) and (not has_children or can_manage_project)
 
+    # Đếm nhật ký mới TRƯỚC khi đánh dấu đã xem, để lần vào này vẫn thấy "có N nhật ký mới";
+    # lần sau quay lại mới hết.
+    diary_unread = _diary_unread(db, user, project.id)
+    _mark_diary_read(db, user, project.id)
+
     flash = request.session.pop("flash", None)
     return templates.TemplateResponse(request, "projects/detail.html", {
         "user": user, "flash": flash, "project": project,
         "members": members, "logs": logs, "timeline_logs": timeline_logs,
         "sub_projects": sub_projects,
         "chat_unread": _chat_unread(db, project.id, user.id),
+        "diary_unread": diary_unread,
         "can_manage_project": can_manage_project,
         "can_create_sub": can_manage_project and _can_create_project(user),
         "can_log_here": can_log_here,

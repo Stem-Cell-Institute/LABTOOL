@@ -71,6 +71,12 @@
     <div class="card border-0 shadow-sm mb-4">
       <div class="card-header bg-white border-0 pt-3 pb-0 d-flex justify-content-between align-items-center">
         <h6 class="fw-bold mb-0"><i class="bi bi-diagram-3 me-2 text-success"></i>Dòng thời gian thí nghiệm ({{ timeline_logs|length }})
+          {% if diary_unread %}
+          {# Tính TRƯỚC khi đánh dấu đã xem, nên lần vào này vẫn thấy; lần sau quay lại sẽ hết #}
+          <span class="badge bg-danger rounded-pill ms-1" title="Nhật ký người khác ghi kể từ lần bạn xem gần nhất">
+            <i class="bi bi-journal-plus me-1"></i>{{ diary_unread }} mới
+          </span>
+          {% endif %}
           <span class="fw-normal text-muted small ms-1">— gồm cả đề tài nhánh</span>
         </h6>
         <div class="d-flex gap-2">

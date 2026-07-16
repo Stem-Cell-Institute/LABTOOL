@@ -376,6 +376,21 @@ class ProjectChatRead(Base):
     last_read_id = Column(Integer, default=0)
 
 
+class ProjectDiaryRead(Base):
+    """Mốc 'đã xem nhật ký tới đâu' của từng người trong 1 project — để báo có nhật ký mới.
+
+    Tách khỏi ProjectChatRead vì là 2 loại thông báo độc lập: đọc hết tin nhắn không có nghĩa
+    là đã xem nhật ký mới, và ngược lại.
+    """
+    __tablename__ = "project_diary_reads"
+    __table_args__ = (UniqueConstraint("project_id", "user_id", name="uq_project_diary_read"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id   = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
+    user_id      = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    last_read_id = Column(Integer, default=0)
+
+
 # ── Nhắn tin (DM 1-1 + nhóm chat tuỳ chọn) ─────────────────────────────────────
 # Độc lập với project: người dùng nhắn riêng nhau hoặc tự lập nhóm gồm thành viên bất kỳ.
 # Khác với ProjectMessage (chat gắn cứng vào 1 project) ở trên.

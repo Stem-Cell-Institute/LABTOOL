@@ -32,7 +32,7 @@ app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, max_age=86400 * 7)
 
 # Tăng số này mỗi khi đẩy bản sửa quan trọng — dùng để tự kiểm tra qua /_status xem
 # server đã thực sự chạy code mới sau khi deploy hay chưa, không cần nhờ ai vào xem log.
-BUILD_VERSION = "2026-07-15-16"
+BUILD_VERSION = "2026-07-15-17"
 
 
 @app.get("/_status")
