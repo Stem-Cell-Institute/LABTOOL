@@ -45,7 +45,10 @@
         <ul class="dropdown-menu dropdown-menu-end">
           <li><h6 class="dropdown-header"><i class="bi bi-people me-1"></i>Quản lý</h6></li>
           <li><a class="dropdown-item" href="/admin/groups"><i class="bi bi-people me-2 text-secondary"></i>Nhóm nghiên cứu</a></li>
-          <li><a class="dropdown-item" href="/admin/users"><i class="bi bi-person-gear me-2 text-secondary"></i>Tài khoản</a></li>
+          <li><a class="dropdown-item d-flex align-items-center" href="/admin/users">
+            <i class="bi bi-person-gear me-2 text-secondary"></i>Tài khoản
+            <span id="usersPendingBadge" class="badge bg-danger rounded-pill ms-auto" style="display:none;font-size:.65rem;"></span>
+          </a></li>
           <li><a class="dropdown-item" href="/admin/invites"><i class="bi bi-envelope-plus me-2 text-secondary"></i>Mời người dùng</a></li>
           <li><a class="dropdown-item d-flex align-items-center" href="/admin/password-resets">
             <i class="bi bi-key me-2 text-secondary"></i>Yêu cầu đặt lại mật khẩu
@@ -227,6 +230,9 @@
       if (!d || d.count === 0) return;
       const b = document.getElementById('pendingBadge');
       if (b) { b.textContent = d.count; b.style.display = ''; }
+      // Cùng số đó hiện luôn trên mục "Tài khoản" trong dropdown, để admin biết bấm vào đâu.
+      const bItem = document.getElementById('usersPendingBadge');
+      if (bItem) { bItem.textContent = d.count; bItem.style.display = ''; }
     }).catch(() => {});
 
   fetch('/admin/password-resets/pending-count')

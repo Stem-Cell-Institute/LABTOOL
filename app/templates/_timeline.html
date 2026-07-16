@@ -1,0 +1,89 @@
+{# ── Timeline nhật ký thí nghiệm (component tái sử dụng) ───────────────────────
+   Cây thời gian dọc: mỗi mốc = 1 nhật ký, nhóm theo ngày, hiện ai làm gì lúc nào.
+   Tham số (set trước khi {% include %}, dùng chung context của trang gọi):
+     tl_entries            : list DailyLog — PHẢI sắp xếp created_at GIẢM DẦN (mới nhất trước)
+     tl_show_author        : hiện người thực hiện        (project/overview = True; my-diary = False)
+     tl_show_project       : hiện badge project/sổ tay
+     tl_show_group         : hiện tên nhóm               (overview)
+     tl_show_status        : hiện trạng thái khoá        — cần truyền kèm tl_is_locked
+     tl_is_locked          : callable(entry)->bool       (chỉ cần khi tl_show_status=True)
+     tl_current_project_id : (tuỳ chọn) chỉ hiện badge project khi nhật ký thuộc project/nhánh KHÁC id này
+#}
+{% set tl_show_author       = tl_show_author       | default(false) %}
+{% set tl_show_project      = tl_show_project      | default(false) %}
+{% set tl_show_group        = tl_show_group        | default(false) %}
+{% set tl_show_status       = tl_show_status       | default(false) %}
+{% set tl_current_project_id = tl_current_project_id | default(None) %}
+
+<style>
+.exp-tl{position:relative;padding-left:1.9rem;margin:.25rem 0}
+.exp-tl::before{content:"";position:absolute;left:.6rem;top:.4rem;bottom:.4rem;width:2px;background:linear-gradient(#22c55e,rgba(22,163,74,.15))}
+.exp-tl .tl-day{position:relative;margin:1.1rem 0 .55rem -1.9rem;padding-left:1.9rem}
+.exp-tl .tl-day span{display:inline-block;background:#16a34a;color:#fff;font-size:.72rem;font-weight:600;padding:.15rem .65rem;border-radius:20px}
+.exp-tl .tl-item{position:relative;margin-bottom:.7rem}
+.exp-tl .tl-dot{position:absolute;left:-1.52rem;top:.5rem;width:.85rem;height:.85rem;border-radius:50%;background:#22c55e;border:2px solid #fff;box-shadow:0 0 0 2px rgba(34,197,94,.35)}
+.exp-tl .tl-card{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:.55rem .8rem;transition:box-shadow .15s}
+.exp-tl .tl-card:hover{box-shadow:0 4px 14px rgba(0,0,0,.08)}
+.exp-tl .tl-time{font-size:.72rem;color:#6b7280;font-weight:600}
+.exp-tl .tl-title{font-weight:700;color:#111827;text-decoration:none}
+.exp-tl .tl-title:hover{color:#16a34a;text-decoration:underline}
+.exp-tl .tl-snippet{font-size:.83rem;color:#6b7280;margin:.3rem 0 0}
+.exp-tl .tl-badge{display:inline-block;font-size:.68rem;padding:.12rem .5rem;border-radius:20px;text-decoration:none}
+</style>
+
+<div class="exp-tl">
+  {% set ns = namespace(day=None) %}
+  {% for e in tl_entries %}
+    {% set d = e.created_at.strftime('%d/%m/%Y') %}
+    {% if d != ns.day %}{% set ns.day = d %}
+    <div class="tl-day"><span><i class="bi bi-calendar3 me-1"></i>{{ d }}</span></div>
+    {% endif %}
+    <div class="tl-item">
+      <div class="tl-dot"></div>
+      {# Cả thẻ đều bấm được để mở nhật ký — trước đây chỉ nút "Xem"/tiêu đề mới bấm được,
+         nên bấm vào thân thẻ (giờ, nội dung, badge) tưởng không xem được. getSelection() để
+         không mở nhật ký khi người dùng chỉ đang bôi đen chọn văn bản. #}
+      <div class="tl-card" role="link" tabindex="0" style="cursor:pointer"
+           onclick="if(!window.getSelection().toString()){location.href='/diary/{{ e.id }}'}"
+           onkeydown="if(event.key==='Enter'){location.href='/diary/{{ e.id }}'}">
+        <div class="d-flex justify-content-between align-items-start gap-2">
+          <div class="flex-grow-1">
+            <span class="tl-time"><i class="bi bi-clock me-1"></i>{{ e.created_at.strftime('%H:%M') }}</span>
+            {% if tl_show_author %}
+            <span class="ms-2 small"><i class="bi bi-person-circle me-1 text-secondary"></i><strong>{{ e.author.full_name or e.author.email }}</strong></span>
+            {% endif %}
+          </div>
+          <a href="/diary/{{ e.id }}" class="btn btn-sm btn-outline-primary py-0 px-2">Xem</a>
+        </div>
+        <div class="mt-1">
+          <a href="/diary/{{ e.id }}" class="tl-title">{{ e.title or ('Nhật ký #' ~ e.id) }}</a>
+        </div>
+        <div class="d-flex flex-wrap gap-1 mt-1">
+          {% if tl_show_group and e.group %}
+          <span class="tl-badge bg-light text-secondary border"><i class="bi bi-people me-1"></i>{{ e.group.name }}</span>
+          {% endif %}
+          {% if tl_show_project %}
+            {% if e.project and (tl_current_project_id is none or e.project.id != tl_current_project_id) %}
+            <a href="/projects/{{ e.project.id }}" class="tl-badge" style="background:#ffedd5;color:#c2410c;" onclick="event.stopPropagation()"><i class="bi bi-kanban me-1"></i>{{ e.project.full_path_name }}</a>
+            {% elif e.notebook %}
+            <a href="/notebooks/{{ e.notebook.id }}" class="tl-badge" style="background:#ffedd5;color:#c2410c;" onclick="event.stopPropagation()"><i class="bi bi-journal-bookmark me-1"></i>{{ e.notebook.topic_name }}</a>
+            {% endif %}
+          {% endif %}
+          {% if e.files %}
+          <span class="tl-badge bg-light text-secondary border"><i class="bi bi-paperclip me-1"></i>{{ e.files|length }} tệp</span>
+          {% endif %}
+          {% if tl_show_status %}
+            {% if tl_is_locked(e) %}
+            <span class="tl-badge bg-secondary text-white"><i class="bi bi-lock-fill me-1"></i>Đã khoá</span>
+            {% else %}
+            <span class="tl-badge bg-success text-white"><i class="bi bi-unlock-fill me-1"></i>Còn sửa được</span>
+            {% endif %}
+          {% endif %}
+        </div>
+        {% if e.content %}
+        <p class="tl-snippet">{{ e.content[:140] }}{% if e.content|length > 140 %}…{% endif %}</p>
+        {% endif %}
+      </div>
+    </div>
+  {% endfor %}
+</div>

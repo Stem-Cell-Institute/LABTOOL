@@ -53,55 +53,15 @@
 </div>
 
 <div class="card border-0 shadow-sm">
-  <div class="card-body p-0">
+  <div class="card-body">
     {% if entries %}
-    <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0">
-        <thead class="table-light">
-          <tr>
-            <th>Nghiên cứu viên</th>
-            <th>Nhóm</th>
-            <th>Project</th>
-            <th>Sổ tay</th>
-            <th>Tiêu đề</th>
-            <th>Tạo lúc</th>
-            <th>Tệp đính kèm</th>
-            <th>Trạng thái</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for e in entries %}
-          {% set locked = is_locked(e) %}
-          <tr>
-            <td>{{ e.author.full_name or e.author.email }}</td>
-            <td>{{ e.group.name if e.group else '—' }}</td>
-            <td>
-              {% if e.project %}
-              <a href="/projects/{{ e.project.id }}" class="badge text-decoration-none" style="background:#ffedd5;color:#c2410c;">{{ e.project.full_path_name }}</a>
-              {% else %}<span class="text-muted">—</span>{% endif %}
-            </td>
-            <td>
-              {% if e.notebook %}
-              <a href="/notebooks/{{ e.notebook.id }}" class="badge text-decoration-none" style="background:#ffedd5;color:#c2410c;">{{ e.notebook.topic_name }}</a>
-              {% else %}<span class="text-muted">—</span>{% endif %}
-            </td>
-            <td>{{ e.title or ('Nhật ký #' ~ e.id) }}</td>
-            <td class="text-muted small">{{ e.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
-            <td class="text-muted small">{{ e.files|length }}</td>
-            <td>
-              {% if locked %}
-                <span class="badge bg-secondary"><i class="bi bi-lock-fill me-1"></i>Đã khoá</span>
-              {% else %}
-                <span class="badge bg-success"><i class="bi bi-unlock-fill me-1"></i>Còn sửa được</span>
-              {% endif %}
-            </td>
-            <td><a href="/diary/{{ e.id }}" class="btn btn-sm btn-outline-primary">Xem</a></td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+    {% set tl_entries = entries %}
+    {% set tl_show_author = True %}
+    {% set tl_show_project = True %}
+    {% set tl_show_group = True %}
+    {% set tl_show_status = True %}
+    {% set tl_is_locked = is_locked %}
+    {% include "_timeline.html" %}
     {% else %}
     <div class="text-center py-5 text-muted">
       <i class="bi bi-journal" style="font-size:3rem;opacity:.3;"></i>

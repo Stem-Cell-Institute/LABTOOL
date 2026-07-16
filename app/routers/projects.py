@@ -57,6 +57,20 @@ def _can_view_project(user: User, project: Project, db: Session) -> bool:
     )
 
 
+def _descendant_project_ids(db: Session, root_id: int) -> list[int]:
+    """Tất cả id đề tài nhánh con (mọi cấp) bên dưới root_id. Duyệt theo chiều rộng,
+    có seen-set chống lặp vô hạn nếu dữ liệu parent_id lỡ tạo vòng."""
+    ids, stack, seen = [], [root_id], {root_id}
+    while stack:
+        pid = stack.pop()
+        for (cid,) in db.query(Project.id).filter(Project.parent_id == pid).all():
+            if cid not in seen:
+                seen.add(cid)
+                ids.append(cid)
+                stack.append(cid)
+    return ids
+
+
 def _can_manage_project(user: User, project: Project, db: Session) -> bool:
     """Quản lý Project, quản lý Project cha (giám sát nhánh), hoặc admin/quản lý mới được
     thêm/xoá thành viên, sửa thông tin, tạo/xoá đề tài nhánh."""
@@ -274,7 +288,23 @@ def add_member(project_id: int, request: Request, email: str = Form(...), db: Se
                  user_id=user.id, target_type="project", target_id=project_id,
                  group_id=user.group_id)
 
-    request.session["flash"] = f"Đã thêm {target.full_name or target.email} vào project."
+    # Thêm được không có nghĩa là người đó dùng được ngay: đăng nhập còn bị chặn nếu chưa
+    # duyệt (is_approved) hoặc đã bị vô hiệu hoá (is_active). Báo rõ để người quản lý project
+    # không tưởng nhầm là xong — tránh đúng tình huống "thêm vào project được mà họ vẫn không
+    # vào được hệ thống".
+    name = target.full_name or target.email
+    if not target.is_approved:
+        request.session["flash"] = (
+            f"Đã thêm {name} vào project. ⚠️ Tài khoản này CHƯA được quản trị viên duyệt nên "
+            f"chưa đăng nhập được — cần duyệt trong mục Quản trị › Tài khoản thì họ mới truy cập được project."
+        )
+    elif not target.is_active:
+        request.session["flash"] = (
+            f"Đã thêm {name} vào project. ⚠️ Tài khoản này đang bị vô hiệu hoá nên chưa đăng nhập được "
+            f"cho tới khi được kích hoạt lại."
+        )
+    else:
+        request.session["flash"] = f"Đã thêm {name} vào project."
     return RedirectResponse(f"/projects/{project_id}", status_code=302)
 
 
@@ -367,6 +397,22 @@ def view_project(project_id: int, request: Request, db: Session = Depends(get_db
           .limit(200)
           .all()
     )
+
+    # Timeline tổng quan: gộp nhật ký của project NÀY + các đề tài nhánh con mà người đang
+    # xem được phép xem (chủ project cha thấy hết nhánh dưới; thành viên thường chỉ thấy nhánh
+    # mình tham gia) — không lộ nhật ký nhánh mà họ vốn không có quyền xem.
+    timeline_ids = [project_id]
+    for cid in _descendant_project_ids(db, project_id):
+        sub = db.get(Project, cid)
+        if sub and _can_view_project(user, sub, db):
+            timeline_ids.append(cid)
+    timeline_logs = (
+        db.query(DailyLog)
+          .filter(DailyLog.project_id.in_(timeline_ids))
+          .order_by(DailyLog.created_at.desc())
+          .limit(300)
+          .all()
+    )
     sub_projects = (
         db.query(Project)
           .filter(Project.parent_id == project_id)
@@ -381,7 +427,8 @@ def view_project(project_id: int, request: Request, db: Session = Depends(get_db
     flash = request.session.pop("flash", None)
     return templates.TemplateResponse(request, "projects/detail.html", {
         "user": user, "flash": flash, "project": project,
-        "members": members, "logs": logs, "sub_projects": sub_projects,
+        "members": members, "logs": logs, "timeline_logs": timeline_logs,
+        "sub_projects": sub_projects,
         "can_manage_project": can_manage_project,
         "can_create_sub": can_manage_project and _can_create_project(user),
         "can_log_here": can_log_here,

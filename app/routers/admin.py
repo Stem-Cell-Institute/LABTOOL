@@ -19,6 +19,22 @@ logger = logging.getLogger(__name__)
 ALLOWED_EXT = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
 
 
+def _opt_int(v) -> int | None:
+    """Ép group_id (và các khoá ngoại tuỳ chọn khác) từ form về int hoặc None.
+
+    Thẻ <select> trong HTML gửi CHUỖI RỖNG '' khi người dùng để mặc định '— Không chọn —'.
+    Nếu route khai báo `group_id: int = Form(None)` thì Pydantic/FastAPI cố ép '' thành int
+    và ném lỗi 422 'unable to parse string as an integer' — trang trắng JSON thay vì hoạt động.
+    Nhận về dạng str rồi tự chuyển: rỗng -> None, số hợp lệ -> int, còn lại -> None.
+    """
+    if v is None or str(v).strip() == "":
+        return None
+    try:
+        return int(v)
+    except (ValueError, TypeError):
+        return None
+
+
 def _get_admin(request: Request, db: Session):
     uid = request.session.get("user_id")
     if not uid:
@@ -160,7 +176,7 @@ def pending_count(request: Request, db: Session = Depends(get_db)):
 def approve_user(
     user_id: int,
     request: Request,
-    group_id: int = Form(None),
+    group_id: str = Form(""),
     db: Session = Depends(get_db),
 ):
     admin = _get_admin(request, db)
@@ -170,7 +186,7 @@ def approve_user(
     if not target:
         return RedirectResponse("/admin/users", status_code=302)
     target.is_approved = True
-    target.group_id = group_id if group_id else None
+    target.group_id = _opt_int(group_id)
     db.commit()
     log_activity(db, "toggle_active", f"Admin duyet tai khoan '{target.email}'",
                  user_id=admin.id, target_type="user", target_id=target.id)
@@ -205,7 +221,7 @@ def create_user(
     role: str = Form("member"),
     member_type: str = Form("researcher"),
     can_create_project: str = Form(None),
-    group_id: int = Form(None),
+    group_id: str = Form(""),
     db: Session = Depends(get_db),
 ):
     admin = _get_admin(request, db)
@@ -234,7 +250,7 @@ def create_user(
         member_type=actual_member_type,
         can_create_project=bool(can_create_project),
         can_view_all=can_view,
-        group_id=group_id if group_id else None,
+        group_id=_opt_int(group_id),
         is_approved=True,   # admin tạo thì tự động được duyệt
     )
     db.add(new_user)
@@ -254,7 +270,7 @@ def update_user(
     role: str = Form("member"),
     member_type: str = Form("researcher"),
     can_create_project: str = Form(None),
-    group_id: int = Form(None),
+    group_id: str = Form(""),
     new_password: str = Form(""),
     db: Session = Depends(get_db),
 ):
@@ -279,7 +295,7 @@ def update_user(
     target.member_type = member_type if member_type in MEMBER_TYPES else "researcher"
     target.can_create_project = bool(can_create_project)
     target.can_view_all = can_view
-    target.group_id = group_id if group_id else None
+    target.group_id = _opt_int(group_id)
     if new_password:
         target.password_hash = hash_password(new_password)
     db.commit()
@@ -469,7 +485,7 @@ def invite_create(
     role: str = Form("member"),
     member_type: str = Form("researcher"),
     can_create_project: str = Form(None),
-    group_id: int = Form(None),
+    group_id: str = Form(""),
     db: Session = Depends(get_db),
 ):
     from datetime import datetime as _dt, timedelta as _td
@@ -500,7 +516,7 @@ def invite_create(
         can_view_all=can_view,
         member_type=member_type if member_type in MEMBER_TYPES else "researcher",
         can_create_project=bool(can_create_project),
-        group_id=group_id if group_id else None,
+        group_id=_opt_int(group_id),
         created_by=admin.id,
         expires_at=_dt.utcnow() + _td(days=INVITE_EXPIRE_DAYS),
     )
