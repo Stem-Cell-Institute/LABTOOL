@@ -226,6 +226,7 @@ def export_pdf(log_id: int, request: Request, db: Session = Depends(get_db)):
 
     try:
         from weasyprint import HTML
+        from app.timeutil import vn as _vn   # bản in cũng phải là giờ địa phương, không phải UTC
         content_html = markdown.markdown(log.content, extensions=["tables", "fenced_code", "nl2br"])
         html_content = f"""<!DOCTYPE html>
 <html><head>
@@ -241,7 +242,7 @@ def export_pdf(log_id: int, request: Request, db: Session = Depends(get_db)):
   .meta {{ color: #666; font-size: 0.9em; margin-bottom: 1em; }}
 </style>
 </head><body>
-<p class="meta">Nhom: {log.video.group.name} | Ngay: {log.created_at.strftime('%d/%m/%Y %H:%M')} | AI: {log.ai_model}</p>
+<p class="meta">Nhom: {log.video.group.name} | Ngay: {_vn(log.created_at, '%d/%m/%Y %H:%M')} | AI: {log.ai_model}</p>
 {content_html}
 </body></html>"""
         pdf_bytes = HTML(string=html_content).write_pdf()

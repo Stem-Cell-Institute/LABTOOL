@@ -65,4 +65,34 @@
   {% endfor %}
 </div>
 {% endif %}
+
+{% if archived %}
+{# Project đã cất đi — vẫn mở/xem được đầy đủ, chỉ không chiếm chỗ ở danh sách đang làm #}
+<div class="mt-4">
+  <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#archivedList">
+    <i class="bi bi-archive me-1"></i>Đã lưu trữ ({{ archived|length }})
+    <i class="bi bi-chevron-down ms-1"></i>
+  </button>
+  <div class="collapse mt-2" id="archivedList">
+    <div class="row g-3">
+      {% for p in archived %}
+      <div class="col-md-6 col-lg-4">
+        <div class="card border-0 shadow-sm h-100 opacity-75" style="border-left:4px solid #adb5bd !important;">
+          <div class="card-body d-flex flex-column">
+            <h6 class="fw-bold mb-1">
+              {{ p.name }}
+              <span class="badge bg-secondary ms-1" style="font-size:.65rem;"><i class="bi bi-archive"></i></span>
+            </h6>
+            <div class="text-muted small mb-2">
+              Lưu trữ ngày {{ p.archived_at | vn('%d/%m/%Y') }} · {{ p.members|length }} thành viên
+            </div>
+            <a href="/projects/{{ p.id }}" class="btn btn-sm btn-outline-secondary mt-auto">Xem / mở lại</a>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
 {% endblock %}

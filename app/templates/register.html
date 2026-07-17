@@ -75,10 +75,13 @@
         <div class="input-group">
           <span class="input-group-text"><i class="bi bi-envelope"></i></span>
           <input type="email" name="email" class="form-control"
-                 placeholder="abc@sci.edu.vn" required
+                 placeholder="Email của bạn" required
                  value="{{ form.email if form else '' }}">
         </div>
-        <div class="form-text">Dùng để đăng nhập, vui lòng nhập chính xác.</div>
+        <div class="form-text">
+          Dùng để đăng nhập — <strong>email nào cũng được</strong> (Gmail, email Viện...),
+          miễn là email bạn thường dùng. Vui lòng nhập chính xác.
+        </div>
       </div>
 
       <div class="mb-3">

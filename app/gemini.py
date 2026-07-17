@@ -531,8 +531,11 @@ def ask_about_diary_entries(question: str, entries: list, history: str = "") -> 
             scope = f" | Project: {e.project.name}"
         elif e.notebook:
             scope = f" | Sổ tay: {e.notebook.topic_name}"
+        # Quy đổi ra giờ địa phương: AI phải "thấy" đúng mốc giờ mà người dùng thấy, nếu không
+        # câu trả lời sẽ lệch 7 tiếng so với câu hỏi kiểu "hôm 20/7 làm gì".
+        from app.timeutil import vn as _vn
         parts.append(
-            f"--- Nhật ký #{e.id} — {author} — {e.created_at.strftime('%d/%m/%Y %H:%M')}"
+            f"--- Nhật ký #{e.id} — {author} — {_vn(e.created_at, '%d/%m/%Y %H:%M')}"
             f" — {e.title or '(không có tiêu đề)'}{scope} ---\n{content}"
         )
     entries_text = "\n\n".join(parts)

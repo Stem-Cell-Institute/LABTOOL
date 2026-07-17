@@ -1,12 +1,16 @@
 """Project nghiên cứu — nghiên cứu viên tạo, mời thêm thành viên, gắn nhật ký thí nghiệm vào."""
+import os
 from datetime import datetime
-from fastapi import APIRouter, Request, Depends, Form, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import APIRouter, Request, Depends, Form, File, UploadFile, HTTPException
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import (User, Project, ProjectMember, DailyLog, ProjectMessage,
-                        ProjectChatRead, ProjectDiaryRead)
+                        ProjectMessageFile, ProjectChatRead, ProjectDiaryRead)
 from app.activity import log_activity
+from app.uploads import safe_filename, file_kind, reject_reason
+
+PROJECT_CHAT_UPLOAD_DIR = "uploads/project_chat"
 
 router = APIRouter()
 from app.templating import templates
@@ -158,15 +162,20 @@ def my_projects(request: Request, db: Session = Depends(get_db)):
           .order_by(Project.created_at.desc())
           .all()
     )
-    projects = [m.project for m in memberships]
+    all_projects = [m.project for m in memberships if m.project]
+    # Project đã lưu trữ tách sang mục riêng — vẫn mở/xem được, chỉ là không chiếm chỗ ở
+    # danh sách đang làm.
+    projects = [p for p in all_projects if not p.is_archived]
+    archived = [p for p in all_projects if p.is_archived]
 
     # Badge "có nhật ký mới" cho từng project — để thấy ngay project nào có việc mới mà không
-    # phải mở lần lượt từng cái.
+    # phải mở lần lượt từng cái. Project đã cất đi thì không cần báo nữa.
     diary_unread = {p.id: _diary_unread(db, user, p.id) for p in projects}
 
     flash = request.session.pop("flash", None)
     return templates.TemplateResponse(request, "projects/list.html", {
         "user": user, "flash": flash, "projects": projects,
+        "archived": archived,
         "diary_unread": diary_unread,
         "can_create_project": _can_create_project(user),
     })
@@ -399,6 +408,54 @@ def add_member(project_id: int, request: Request, email: str = Form(...), db: Se
     return RedirectResponse(f"/projects/{project_id}", status_code=302)
 
 
+@router.post("/projects/{project_id}/transfer-owner/{user_id}")
+def transfer_owner(project_id: int, user_id: int, request: Request, db: Session = Depends(get_db)):
+    """Chuyển quyền quản lý project cho một thành viên khác (bàn giao khi nghỉ việc, chuyển
+    nhóm, hết vai trò...).
+
+    Người quản lý CŨ vẫn ở lại làm thành viên thường — không tự động đá ra, vì nhật ký họ đã
+    ghi vẫn thuộc project và họ thường vẫn cần xem tiếp.
+    """
+    user = _get_user(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    project = db.get(Project, project_id)
+    if not project or not _can_manage_project(user, project, db):
+        raise HTTPException(status_code=403)
+
+    if user_id == project.owner_id:
+        request.session["flash"] = "error:Người này đã là quản lý project rồi."
+        return RedirectResponse(f"/projects/{project_id}", status_code=302)
+
+    # Bắt buộc là thành viên sẵn có: tránh trao quyền nhầm cho người ngoài project.
+    if not _is_member(db, project_id, user_id):
+        request.session["flash"] = "error:Chỉ chuyển quyền cho người đã là thành viên project."
+        return RedirectResponse(f"/projects/{project_id}", status_code=302)
+
+    target = db.get(User, user_id)
+    if not target:
+        raise HTTPException(status_code=404)
+
+    old_owner = db.get(User, project.owner_id)
+    project.owner_id = user_id
+    db.commit()
+
+    old_name = (old_owner.full_name or old_owner.email) if old_owner else "?"
+    new_name = target.full_name or target.email
+    log_activity(db, "transfer_project_owner",
+                 f"Chuyen quyen quan ly project '{project.name}' tu '{old_name}' sang '{new_name}'",
+                 user_id=user.id, target_type="project", target_id=project_id,
+                 group_id=user.group_id)
+
+    msg = f"Đã chuyển quyền quản lý project cho {new_name}."
+    # Người vừa trao quyền thường mất luôn quyền quản lý ngay sau thao tác này (trừ khi họ còn
+    # là admin hoặc chủ đề tài cha) -> nói rõ, tránh ngạc nhiên khi thấy các nút quản lý biến mất.
+    if not _can_manage_project(user, project, db):
+        msg += " Bạn không còn quyền quản lý project này nữa."
+    request.session["flash"] = msg
+    return RedirectResponse(f"/projects/{project_id}", status_code=302)
+
+
 @router.post("/projects/{project_id}/remove-member/{user_id}")
 def remove_member(project_id: int, user_id: int, request: Request, db: Session = Depends(get_db)):
     user = _get_user(request, db)
@@ -455,6 +512,7 @@ def _mark_chat_read(db: Session, project_id: int, user_id: int):
 @router.get("/projects/{project_id}/messages")
 def get_messages(project_id: int, request: Request, after: int = 0, db: Session = Depends(get_db)):
     from fastapi.responses import JSONResponse
+    from app.timeutil import vn
     user = _get_user(request, db)
     if not user:
         return JSONResponse({"messages": []}, status_code=401)
@@ -477,9 +535,34 @@ def get_messages(project_id: int, request: Request, after: int = 0, db: Session 
             "user_id": m.user_id,
             "name": (m.user.full_name or m.user.email) if m.user else "?",
             "content": m.content,
-            "time": m.created_at.strftime("%H:%M · %d/%m"),
+            "time": vn(m.created_at, "%H:%M · %d/%m"),   # quy đổi ra giờ địa phương, không hiện UTC
+            "files": [{
+                "id": f.id,
+                "name": f.original_name,
+                "kind": f.file_type,
+                "size_kb": round((f.file_size or 0) / 1024),
+                "url": f"/projects/{project_id}/messages/file/{f.id}",
+            } for f in m.files],
         } for m in msgs],
     })
+
+
+@router.get("/projects/{project_id}/messages/file/{file_id}")
+def download_chat_file(project_id: int, file_id: int, request: Request, db: Session = Depends(get_db)):
+    """Tải/xem tệp trong chat nhóm project. Cùng phạm vi quyền với việc đọc chat: phải xem
+    được project. Thư mục uploads KHÔNG mount công khai nên mọi tệp đều qua đây."""
+    user = _get_user(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    project = db.get(Project, project_id)
+    if not project or not _can_view_project(user, project, db):
+        raise HTTPException(status_code=403)
+    f = db.get(ProjectMessageFile, file_id)
+    if not f or not f.message or f.message.project_id != project_id:
+        raise HTTPException(status_code=404)
+    if not os.path.exists(f.filename):
+        raise HTTPException(status_code=404, detail="Tệp không còn trên máy chủ.")
+    return FileResponse(f.filename, filename=f.original_name)
 
 
 @router.get("/projects/{project_id}/messages/unread-count")
@@ -495,7 +578,9 @@ def chat_unread_count(project_id: int, request: Request, db: Session = Depends(g
 
 
 @router.post("/projects/{project_id}/messages")
-def post_message(project_id: int, request: Request, content: str = Form(...), db: Session = Depends(get_db)):
+async def post_message(project_id: int, request: Request, content: str = Form(""),
+                       files: list[UploadFile] = File(default=[]),
+                       db: Session = Depends(get_db)):
     from fastapi.responses import JSONResponse
     user = _get_user(request, db)
     if not user:
@@ -504,15 +589,44 @@ def post_message(project_id: int, request: Request, content: str = Form(...), db
     if not project or not _can_view_project(user, project, db):
         return JSONResponse({"ok": False}, status_code=403)
 
-    text = (content or "").strip()
-    if not text:
+    text = (content or "").strip()[:4000]   # chặn tin nhắn quá dài
+    real_files = [f for f in files if f and f.filename]
+    # Cho gửi tin chỉ có ảnh/tệp, nhưng không cho tin rỗng hoàn toàn.
+    if not text and not real_files:
         return JSONResponse({"ok": False, "error": "empty"}, status_code=400)
-    text = text[:4000]  # chặn tin nhắn quá dài
+
     m = ProjectMessage(project_id=project_id, user_id=user.id, content=text)
     db.add(m)
+    db.flush()
+
+    rejected = []
+    if real_files:
+        msg_dir = os.path.join(PROJECT_CHAT_UPLOAD_DIR, str(project_id), str(m.id))
+        os.makedirs(msg_dir, exist_ok=True)
+        for up in real_files:
+            data = await up.read()
+            why = reject_reason(up.filename, len(data))
+            if why:
+                rejected.append(why)
+                continue
+            safe = safe_filename(up.filename)
+            path = os.path.join(msg_dir, safe)
+            with open(path, "wb") as fh:
+                fh.write(data)
+            db.add(ProjectMessageFile(message_id=m.id, filename=path, original_name=safe,
+                                      file_type=file_kind(os.path.splitext(safe)[1].lower()),
+                                      file_size=len(data)))
+
+    db.flush()
+    # Mọi tệp đều bị từ chối và cũng không có chữ -> huỷ luôn tin, đừng để lại tin rỗng.
+    if not text and not m.files:
+        db.delete(m)
+        db.commit()
+        return JSONResponse({"ok": False, "error": "rejected", "rejected": rejected}, status_code=400)
+
     db.commit()
     db.refresh(m)
-    return JSONResponse({"ok": True, "id": m.id})
+    return JSONResponse({"ok": True, "id": m.id, "rejected": rejected})
 
 
 @router.post("/projects/{project_id}/leave")
@@ -536,8 +650,13 @@ def leave_project(project_id: int, request: Request, db: Session = Depends(get_d
     return RedirectResponse("/projects", status_code=302)
 
 
-@router.post("/projects/{project_id}/delete")
-def delete_project(project_id: int, request: Request, db: Session = Depends(get_db)):
+# ── Lưu trữ / mở lại project ──────────────────────────────────────────────────
+# "Cất đi" thay cho "phá huỷ": ẩn khỏi danh sách nhưng giữ NGUYÊN mọi thứ (nhật ký vẫn gắn vào
+# project nên thành viên không mất quyền xem) và mở lại được bất cứ lúc nào. Đây mới là thứ
+# người dùng thực sự cần khi "đề tài xong rồi" — nên họ tự làm được, không cần phiền admin.
+
+@router.post("/projects/{project_id}/archive")
+def archive_project(project_id: int, request: Request, db: Session = Depends(get_db)):
     user = _get_user(request, db)
     if not user:
         return RedirectResponse("/login", status_code=302)
@@ -545,11 +664,102 @@ def delete_project(project_id: int, request: Request, db: Session = Depends(get_
     if not project or not _can_manage_project(user, project, db):
         raise HTTPException(status_code=403)
 
-    # Giữ nguyên nhật ký đã gắn và các đề tài nhánh bên dưới — chỉ gỡ liên kết, không xoá
-    db.query(DailyLog).filter(DailyLog.project_id == project_id).update({"project_id": None})
-    db.query(Project).filter(Project.parent_id == project_id).update({"parent_id": None})
-    db.delete(project)
+    if not project.is_archived:
+        project.archived_at = datetime.utcnow()
+        project.archived_by = user.id
+        db.commit()
+        log_activity(db, "archive_project", f"Luu tru project '{project.name}'",
+                     user_id=user.id, target_type="project", target_id=project_id,
+                     group_id=user.group_id)
+    request.session["flash"] = (
+        f"Đã lưu trữ project '{project.name}'. Mọi nhật ký và dữ liệu vẫn được giữ nguyên — "
+        f"mở lại bất cứ lúc nào ở mục “Đã lưu trữ”."
+    )
+    return RedirectResponse("/projects", status_code=302)
+
+
+@router.post("/projects/{project_id}/unarchive")
+def unarchive_project(project_id: int, request: Request, db: Session = Depends(get_db)):
+    user = _get_user(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    project = db.get(Project, project_id)
+    if not project or not _can_manage_project(user, project, db):
+        raise HTTPException(status_code=403)
+
+    project.archived_at = None
+    project.archived_by = None
     db.commit()
+    log_activity(db, "archive_project", f"Mo lai project '{project.name}' tu luu tru",
+                 user_id=user.id, target_type="project", target_id=project_id,
+                 group_id=user.group_id)
+    request.session["flash"] = f"Đã mở lại project '{project.name}'."
+    return RedirectResponse(f"/projects/{project_id}", status_code=302)
+
+
+@router.post("/projects/{project_id}/delete")
+def delete_project(project_id: int, request: Request, db: Session = Depends(get_db)):
+    """Xoá THẬT — chỉ admin/quản lý. Người dùng thường dùng 'Lưu trữ' ở trên.
+
+    Lý do siết: xoá project gỡ nhật ký ra khỏi project, mà nhật ký đã quá hạn khoá thì KHÔNG
+    thể gắn lại (route sửa từ chối bản đã khoá) -> thành viên mất quyền xem nhau VĨNH VIỄN.
+    Đây là con đường để một người sắp nghỉ việc phá vỡ không gian làm việc chung của cả nhóm.
+    """
+    user = _get_user(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404)
+    if not _can_manage(user):
+        request.session["flash"] = (
+            "error:Chỉ quản trị viên mới xoá được project. Nếu đề tài đã xong, hãy dùng "
+            "“Lưu trữ project” — giữ nguyên toàn bộ nhật ký và mở lại được bất cứ lúc nào."
+        )
+        return RedirectResponse(f"/projects/{project_id}", status_code=302)
+
+    from sqlalchemy import func
+    from app.models import ProjectMessageFile, ProjectChatRead as _PCR, ProjectDiaryRead as _PDR
+
+    name = project.name
+    detached = db.query(func.count(DailyLog.id)).filter(DailyLog.project_id == project_id).scalar() or 0
+
+    try:
+        # Dọn dữ liệu chỉ thuộc riêng project này. Bắt buộc phải làm TRƯỚC khi xoá project:
+        # SQLite bật kiểm tra khoá ngoại nên còn dòng nào trỏ tới project là DELETE sẽ nổ 500.
+        msg_ids = [row[0] for row in db.query(ProjectMessage.id)
+                                       .filter(ProjectMessage.project_id == project_id).all()]
+        if msg_ids:
+            for f in db.query(ProjectMessageFile).filter(ProjectMessageFile.message_id.in_(msg_ids)).all():
+                try:
+                    os.remove(f.filename)
+                except OSError:
+                    pass
+            db.query(ProjectMessageFile).filter(ProjectMessageFile.message_id.in_(msg_ids)).delete(synchronize_session=False)
+            db.query(ProjectMessage).filter(ProjectMessage.project_id == project_id).delete(synchronize_session=False)
+        db.query(_PCR).filter(_PCR.project_id == project_id).delete(synchronize_session=False)
+        db.query(_PDR).filter(_PDR.project_id == project_id).delete(synchronize_session=False)
+
+        # Giữ nguyên nhật ký đã gắn và các đề tài nhánh bên dưới — chỉ gỡ liên kết, không xoá
+        db.query(DailyLog).filter(DailyLog.project_id == project_id).update({"project_id": None})
+        db.query(Project).filter(Project.parent_id == project_id).update({"parent_id": None})
+        db.delete(project)
+        db.commit()
+    except Exception:
+        db.rollback()
+        import logging
+        logging.getLogger(__name__).exception("Loi khi xoa project id=%s", project_id)
+        request.session["flash"] = "error:Không xoá được project do còn dữ liệu liên quan. Hãy báo quản trị viên."
+        return RedirectResponse(f"/projects/{project_id}", status_code=302)
+
+    import shutil
+    shutil.rmtree(os.path.join(PROJECT_CHAT_UPLOAD_DIR, str(project_id)), ignore_errors=True)
+
+    # Xoá project là hành động phá huỷ và khó đảo ngược -> phải truy vết được ai làm, lúc nào.
+    log_activity(db, "delete_project",
+                 f"Xoa project '{name}' (id={project_id}) — go lien ket {detached} nhat ky",
+                 user_id=user.id, target_type="project", target_id=project_id,
+                 group_id=user.group_id)
 
     request.session["flash"] = ("Đã xoá project. Nhật ký và đề tài nhánh đã gắn vẫn được giữ nguyên "
                                  "(không còn thuộc project nào).")
@@ -642,7 +852,10 @@ def view_project(project_id: int, request: Request, db: Session = Depends(get_db
 
     can_manage_project = _can_manage_project(user, project, db)
     has_children = db.query(Project.id).filter(Project.parent_id == project.id).first() is not None
-    can_log_here = _is_member(db, project.id, user.id) and (not has_children or can_manage_project)
+    # Project đã lưu trữ = "đã cất đi", không ghi thêm nhật ký mới vào nữa (mở lại thì ghi tiếp được)
+    can_log_here = (_is_member(db, project.id, user.id)
+                    and (not has_children or can_manage_project)
+                    and not project.is_archived)
 
     # Đếm nhật ký mới TRƯỚC khi đánh dấu đã xem, để lần vào này vẫn thấy "có N nhật ký mới";
     # lần sau quay lại mới hết.

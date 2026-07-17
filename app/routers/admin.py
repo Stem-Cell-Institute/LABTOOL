@@ -193,6 +193,29 @@ def approve_user(
     return RedirectResponse("/admin/users", status_code=302)
 
 
+def _purge_user_refs(db: Session, user_id: int):
+    """Xoá các bản ghi đang trỏ tới user, TRƯỚC khi xoá chính user đó.
+
+    SQLite bật PRAGMA foreign_keys=ON (xem app/database.py) nên chỉ cần còn một dòng tham
+    chiếu là lệnh DELETE sẽ nổ IntegrityError -> lỗi 500 trắng trang.
+
+    Ngay khi đăng ký, hệ thống đã ghi 1 dòng 'register' vào nhật ký hoạt động trỏ tới user
+    -> tài khoản chờ duyệt LUÔN có ít nhất 1 tham chiếu, nên nút Từ chối chắc chắn lỗi.
+    Ngoài ra người chờ duyệt còn có thể đã bị thêm vào project hoặc được nhắn tin riêng.
+    """
+    from app.models import (ActivityLog, PasswordResetRequest, ProjectMember,
+                            ConversationMember, ProjectChatRead, ProjectDiaryRead)
+    for model, col in (
+        (ActivityLog, ActivityLog.user_id),
+        (PasswordResetRequest, PasswordResetRequest.user_id),
+        (ProjectMember, ProjectMember.user_id),
+        (ConversationMember, ConversationMember.user_id),
+        (ProjectChatRead, ProjectChatRead.user_id),
+        (ProjectDiaryRead, ProjectDiaryRead.user_id),
+    ):
+        db.query(model).filter(col == user_id).delete(synchronize_session=False)
+
+
 @router.post("/users/{user_id}/reject")
 def reject_user(user_id: int, request: Request, db: Session = Depends(get_db)):
     admin = _get_admin(request, db)
@@ -201,9 +224,25 @@ def reject_user(user_id: int, request: Request, db: Session = Depends(get_db)):
     target = db.get(User, user_id)
     if not target or target.is_approved:
         return RedirectResponse("/admin/users", status_code=302)
+
     email = target.email
-    db.delete(target)
-    db.commit()
+    try:
+        _purge_user_refs(db, target.id)
+        db.delete(target)
+        db.commit()
+    except Exception:
+        # Vẫn còn bảng nào đó tham chiếu tới user (VD tính năng mới thêm sau này) — báo rõ
+        # thay vì để lộ lỗi 500 trắng trang, và gợi ý lối đi khác cho admin.
+        db.rollback()
+        logger.exception("Loi khi tu choi/xoa tai khoan id=%s", user_id)
+        request.session["flash"] = (
+            "error:Không xoá được tài khoản này vì đã có dữ liệu liên quan trong hệ thống. "
+            "Bạn có thể duyệt rồi vô hiệu hoá tài khoản thay vì xoá."
+        )
+        return RedirectResponse("/admin/users", status_code=302)
+
+    log_activity(db, "toggle_active", f"Admin tu choi va xoa tai khoan dang ky '{email}'",
+                 user_id=admin.id)
     request.session["flash"] = f"Đã từ chối và xoá tài khoản đăng ký '{email}'"
     return RedirectResponse("/admin/users", status_code=302)
 

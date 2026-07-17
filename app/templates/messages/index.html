@@ -54,7 +54,13 @@
       </div>
       <div class="card-body" id="chatBody" style="height:60vh;overflow-y:auto;background:#f8f9fa;"></div>
       <div class="card-footer bg-white p-2">
-        <form id="chatForm" class="d-flex gap-2">
+        <div id="filePreview" class="d-flex flex-wrap gap-1 mb-1"></div>
+        <form id="chatForm" class="d-flex gap-2 align-items-center">
+          <input type="file" id="chatFiles" multiple class="d-none">
+          <button type="button" class="btn btn-outline-secondary" id="attachBtn"
+                  data-bs-toggle="tooltip" title="Đính kèm ảnh hoặc tệp (tối đa 25MB/tệp)">
+            <i class="bi bi-paperclip"></i>
+          </button>
           <input type="text" id="chatInput" class="form-control" placeholder="Nhắn tin…" autocomplete="off" maxlength="4000">
           <button type="submit" class="btn" style="background:#c2410c;color:#fff;"><i class="bi bi-send"></i></button>
         </form>
@@ -208,7 +214,28 @@ attachUserSearch('grpSearch', 'grpSuggest', 'grpWrap', (email, name, input) => {
     if (m.deleted) {
       inner += '<div class="px-3 py-2 rounded-3 fst-italic text-muted" style="background:#eee;border:1px solid #e5e7eb;">đã thu hồi</div>';
     } else {
-      inner += '<div class="px-3 py-2 rounded-3 msg-content" style="background:' + (m.mine ? '#c2410c' : '#fff') + ';color:' + (m.mine ? '#fff' : '#111') + ';border:1px solid ' + (m.mine ? '#c2410c' : '#e5e7eb') + ';white-space:pre-wrap;word-break:break-word;">' + esc(m.content) + '</div>';
+      // Tin có thể chỉ có ảnh/tệp mà không có chữ -> chỉ vẽ bong bóng chữ khi thật sự có chữ
+      if (m.content) {
+        inner += '<div class="px-3 py-2 rounded-3 msg-content" style="background:' + (m.mine ? '#c2410c' : '#fff') + ';color:' + (m.mine ? '#fff' : '#111') + ';border:1px solid ' + (m.mine ? '#c2410c' : '#e5e7eb') + ';white-space:pre-wrap;word-break:break-word;">' + esc(m.content) + '</div>';
+      }
+      for (const f of (m.files || [])) {
+        if (f.kind === 'image') {
+          // Ảnh xem ngay tại chỗ, bấm mở kích thước đầy đủ
+          inner += '<a href="' + f.url + '" target="_blank" class="d-block mt-1">' +
+                   '<img src="' + f.url + '" alt="' + esc(f.name) + '" ' +
+                   'style="max-width:100%;max-height:260px;border-radius:10px;border:1px solid #e5e7eb;"></a>';
+        } else {
+          const icon = f.kind === 'pdf' ? 'bi-file-earmark-pdf text-danger'
+                     : f.kind === 'doc' ? 'bi-file-earmark-text text-primary'
+                     : 'bi-file-earmark';
+          inner += '<a href="' + f.url + '" target="_blank" ' +
+                   'class="d-flex align-items-center gap-2 mt-1 p-2 rounded-3 text-decoration-none" ' +
+                   'style="background:#fff;border:1px solid #e5e7eb;color:#111;">' +
+                   '<i class="bi ' + icon + ' fs-4"></i>' +
+                   '<span class="small text-truncate" style="max-width:190px;">' + esc(f.name) +
+                   '<br><span class="text-muted" style="font-size:.66rem;">' + f.size_kb + ' KB — bấm để tải</span></span></a>';
+        }
+      }
     }
     inner += '<div class="text-muted d-flex gap-2 ' + (m.mine ? 'justify-content-end' : '') + '" style="font-size:.66rem;">' +
              '<span>' + esc(m.time) + (m.edited && !m.deleted ? ' · đã sửa' : '') + '</span>';
@@ -282,13 +309,46 @@ attachUserSearch('grpSearch', 'grpSuggest', 'grpWrap', (email, name, input) => {
     if (r.ok) wrap.replaceWith(bubble(Object.assign({}, m, { deleted: true, content: '' })));
   }
 
+  // ── Đính kèm ảnh/tệp ──
+  const fileInput = document.getElementById('chatFiles');
+  const preview   = document.getElementById('filePreview');
+  document.getElementById('attachBtn').addEventListener('click', () => fileInput.click());
+
+  function renderPreview() {
+    preview.innerHTML = '';
+    [...fileInput.files].forEach(f => {
+      const chip = document.createElement('span');
+      chip.className = 'badge bg-light text-dark border d-inline-flex align-items-center gap-1';
+      chip.innerHTML = '<i class="bi bi-paperclip"></i>' + esc(f.name) +
+                       ' <span class="text-muted">(' + Math.round(f.size / 1024) + ' KB)</span>';
+      preview.appendChild(chip);
+    });
+  }
+  fileInput.addEventListener('change', renderPreview);
+
   form.addEventListener('submit', async e => {
     e.preventDefault();
-    const text = input.value.trim(); if (!text) return;
-    input.value = '';
-    const fd = new FormData(); fd.append('content', text);
-    const r = await fetch(BASE + '/send', { method: 'POST', body: fd });
-    if (r.ok) pollNow(); else input.value = text;
+    const text = input.value.trim();
+    const hasFiles = fileInput.files.length > 0;
+    if (!text && !hasFiles) return;          // cho gửi tin chỉ có tệp, nhưng không cho tin rỗng
+
+    const fd = new FormData();
+    fd.append('content', text);
+    [...fileInput.files].forEach(f => fd.append('files', f));
+
+    input.value = ''; fileInput.value = ''; renderPreview();
+    try {
+      const r = await fetch(BASE + '/send', { method: 'POST', body: fd });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok) {
+        // Máy chủ từ chối bớt tệp (quá nặng/định dạng nguy hiểm) -> phải báo, đừng im lặng bỏ qua
+        if (d.rejected && d.rejected.length) alert('Không gửi được một số tệp:\n• ' + d.rejected.join('\n• '));
+        pollNow();
+      } else {
+        alert((d.rejected && d.rejected.length) ? ('Không gửi được:\n• ' + d.rejected.join('\n• ')) : 'Không gửi được tin nhắn.');
+        input.value = text;
+      }
+    } catch (err) { input.value = text; }
   });
 
   async function pollNow() {

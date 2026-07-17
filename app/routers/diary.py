@@ -307,6 +307,8 @@ def _my_projects(db: Session, user_id: int):
     result = []
     for m in memberships:
         p = m.project
+        if not p or p.is_archived:
+            continue          # project đã cất đi thì không gắn nhật ký mới vào nữa
         has_children = db.query(Project.id).filter(Project.parent_id == p.id).first() is not None
         if has_children and p.owner_id != user_id and not is_system_manager:
             continue

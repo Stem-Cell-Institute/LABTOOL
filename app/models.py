@@ -293,6 +293,16 @@ class Project(GeneralInfoMixin, Base):
     parent_id = Column(Integer, ForeignKey("projects.id"), nullable=True)  # đề tài nhánh: gắn vào project cha
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    # Lưu trữ ("cất đi") — KHÁC hẳn xoá: ẩn khỏi danh sách nhưng giữ nguyên mọi thứ và mở lại
+    # được bất cứ lúc nào. Nhật ký vẫn gắn nguyên vào project nên thành viên KHÔNG mất quyền xem.
+    # Đây là lối đi an toàn cho việc "đề tài xong rồi, cất lại" — không cần đụng tới xoá.
+    archived_at = Column(DateTime, nullable=True)
+    archived_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    @property
+    def is_archived(self) -> bool:
+        return self.archived_at is not None
+
     owner    = relationship("User", foreign_keys=[owner_id])
     parent   = relationship("Project", remote_side=[id], back_populates="children")
     children = relationship("Project", back_populates="parent")
@@ -355,10 +365,25 @@ class ProjectMessage(Base):
     id = Column(Integer, primary_key=True, index=True)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
     user_id    = Column(Integer, ForeignKey("users.id"), nullable=False)
-    content    = Column(Text, nullable=False)
+    content    = Column(Text, default="")     # cho phép rỗng: tin chỉ gửi ảnh/tệp
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    user = relationship("User", foreign_keys=[user_id])
+    user  = relationship("User", foreign_keys=[user_id])
+    files = relationship("ProjectMessageFile", back_populates="message", cascade="all, delete-orphan")
+
+
+class ProjectMessageFile(Base):
+    """Ảnh/tệp đính kèm trong chat nhóm của project."""
+    __tablename__ = "project_message_files"
+
+    id = Column(Integer, primary_key=True, index=True)
+    message_id    = Column(Integer, ForeignKey("project_messages.id"), nullable=False, index=True)
+    filename      = Column(String(500), nullable=False)   # đường dẫn trên server
+    original_name = Column(String(500), nullable=False)
+    file_type     = Column(String(20), default="other")   # image | pdf | doc | other
+    file_size     = Column(BigInteger, default=0)
+
+    message = relationship("ProjectMessage", back_populates="files")
 
 
 class ProjectChatRead(Base):
@@ -433,7 +458,22 @@ class ChatMessage(Base):
     edited_at = Column(DateTime, nullable=True)       # có giá trị nếu đã sửa
     is_deleted = Column(Boolean, default=False)       # xoá mềm — hiện "đã thu hồi"
 
-    user = relationship("User", foreign_keys=[user_id])
+    user  = relationship("User", foreign_keys=[user_id])
+    files = relationship("ChatFile", back_populates="message", cascade="all, delete-orphan")
+
+
+class ChatFile(Base):
+    """Ảnh/tệp đính kèm trong tin nhắn. Tách bảng riêng để 1 tin gửi được nhiều tệp."""
+    __tablename__ = "chat_files"
+
+    id = Column(Integer, primary_key=True, index=True)
+    message_id    = Column(Integer, ForeignKey("chat_messages.id"), nullable=False, index=True)
+    filename      = Column(String(500), nullable=False)   # đường dẫn trên server
+    original_name = Column(String(500), nullable=False)
+    file_type     = Column(String(20), default="other")   # image | pdf | doc | other
+    file_size     = Column(BigInteger, default=0)
+
+    message = relationship("ChatMessage", back_populates="files")
 
 
 class DailyLog(Base):

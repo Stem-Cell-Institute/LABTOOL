@@ -3,17 +3,21 @@
 Khu 'Tin nhắn' riêng trên menu. Dùng polling đơn giản (client hỏi lại mỗi vài giây khi
 đang mở) — hệ thống LAN nhỏ, không cần WebSocket.
 """
+import os
 import unicodedata
 from datetime import datetime
-from fastapi import APIRouter, Request, Depends, Form, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi import APIRouter, Request, Depends, Form, File, UploadFile, HTTPException
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, FileResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import User, Conversation, ConversationMember, ChatMessage
+from app.models import User, Conversation, ConversationMember, ChatMessage, ChatFile
+from app.uploads import safe_filename, file_kind, reject_reason
 
 router = APIRouter(prefix="/messages")
 from app.templating import templates
+
+CHAT_UPLOAD_DIR = "uploads/chat"
 
 
 def _get_user(request: Request, db: Session):
@@ -74,6 +78,7 @@ def _my_conversations(db: Session, me_id: int):
 
 
 def _serialize(m: ChatMessage, me_id: int) -> dict:
+    from app.timeutil import vn
     return {
         "id": m.id,
         "user_id": m.user_id,
@@ -82,7 +87,17 @@ def _serialize(m: ChatMessage, me_id: int) -> dict:
         "content": "" if m.is_deleted else m.content,
         "deleted": bool(m.is_deleted),
         "edited": m.edited_at is not None,
-        "time": m.created_at.strftime("%H:%M · %d/%m"),
+        "time": vn(m.created_at, "%H:%M · %d/%m"),
+        # Tin đã thu hồi thì không trả tệp nữa
+        "files": [] if m.is_deleted else [
+            {
+                "id": f.id,
+                "name": f.original_name,
+                "kind": f.file_type,
+                "size_kb": round((f.file_size or 0) / 1024),
+                "url": f"/messages/{m.conversation_id}/file/{f.id}",
+            } for f in m.files
+        ],
     }
 
 
@@ -196,7 +211,9 @@ async def create_group(request: Request, db: Session = Depends(get_db)):
 # ── Gửi / sửa / xoá tin ───────────────────────────────────────────────────────
 
 @router.post("/{conv_id}/send")
-def send_message(conv_id: int, request: Request, content: str = Form(...), db: Session = Depends(get_db)):
+async def send_message(conv_id: int, request: Request, content: str = Form(""),
+                       files: list[UploadFile] = File(default=[]),
+                       db: Session = Depends(get_db)):
     user = _get_user(request, db)
     if not user:
         return JSONResponse({"ok": False}, status_code=401)
@@ -205,17 +222,62 @@ def send_message(conv_id: int, request: Request, content: str = Form(...), db: S
         return JSONResponse({"ok": False}, status_code=403)
 
     text = (content or "").strip()[:4000]
-    if not text:
+    real_files = [f for f in files if f and f.filename]
+    # Cho gửi tin chỉ có ảnh/tệp mà không cần chữ — nhưng không cho gửi tin rỗng hoàn toàn.
+    if not text and not real_files:
         return JSONResponse({"ok": False, "error": "empty"}, status_code=400)
 
     m = ChatMessage(conversation_id=conv_id, user_id=user.id, content=text)
     db.add(m)
+    db.flush()
+
+    rejected = []
+    if real_files:
+        msg_dir = os.path.join(CHAT_UPLOAD_DIR, str(conv_id), str(m.id))
+        os.makedirs(msg_dir, exist_ok=True)
+        for up in real_files:
+            data = await up.read()
+            why = reject_reason(up.filename, len(data))
+            if why:
+                rejected.append(why)
+                continue
+            safe = safe_filename(up.filename)
+            path = os.path.join(msg_dir, safe)
+            with open(path, "wb") as fh:
+                fh.write(data)
+            db.add(ChatFile(message_id=m.id, filename=path, original_name=safe,
+                            file_type=file_kind(os.path.splitext(safe)[1].lower()),
+                            file_size=len(data)))
+
+    # Tất cả tệp đều bị từ chối và cũng không có chữ -> huỷ luôn tin, đừng để lại tin rỗng.
+    db.flush()
+    if not text and not m.files:
+        db.delete(m)
+        db.commit()
+        return JSONResponse({"ok": False, "error": "rejected", "rejected": rejected}, status_code=400)
+
     conv = db.get(Conversation, conv_id)
     conv.last_at = datetime.utcnow()
-    db.flush()
     mem.last_read_id = m.id
     db.commit()
-    return JSONResponse({"ok": True, "id": m.id})
+    return JSONResponse({"ok": True, "id": m.id, "rejected": rejected})
+
+
+@router.get("/{conv_id}/file/{file_id}")
+def download_file(conv_id: int, file_id: int, request: Request, db: Session = Depends(get_db)):
+    """Tải/xem tệp đính kèm. Bắt buộc là thành viên cuộc trò chuyện — thư mục uploads KHÔNG
+    được mount công khai, nên mọi tệp đều phải đi qua đây để kiểm tra quyền."""
+    user = _get_user(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
+    if not _membership(db, conv_id, user.id):
+        raise HTTPException(status_code=403)
+    f = db.get(ChatFile, file_id)
+    if not f or not f.message or f.message.conversation_id != conv_id:
+        raise HTTPException(status_code=404)
+    if not os.path.exists(f.filename):
+        raise HTTPException(status_code=404, detail="Tệp không còn trên máy chủ.")
+    return FileResponse(f.filename, filename=f.original_name)
 
 
 @router.post("/{conv_id}/msg/{msg_id}/edit")
@@ -247,6 +309,15 @@ def delete_message(conv_id: int, msg_id: int, request: Request, db: Session = De
     m = db.get(ChatMessage, msg_id)
     if not m or m.conversation_id != conv_id or m.user_id != user.id:
         return JSONResponse({"ok": False}, status_code=403)  # chỉ thu hồi tin của chính mình
+    # Thu hồi phải xoá luôn tệp đính kèm — nếu chỉ xoá phần chữ thì ảnh/tệp vẫn tải được qua
+    # link cũ, coi như chưa thu hồi gì cả.
+    for f in list(m.files):
+        try:
+            os.remove(f.filename)
+        except OSError:
+            pass          # tệp đã mất trên đĩa thì thôi, vẫn phải xoá bản ghi
+        db.delete(f)
+
     m.is_deleted = True
     m.content = ""
     m.edited_at = datetime.utcnow()   # dùng làm mốc "vừa thay đổi" để polling đồng bộ cho người khác

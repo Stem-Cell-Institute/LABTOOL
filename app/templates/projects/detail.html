@@ -6,6 +6,7 @@
      class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i></a>
   <h4 class="mb-0 fw-bold">
     <i class="bi bi-kanban-fill me-2" style="color:#c2410c;"></i>{{ project.name }}
+    {% if project.is_archived %}<span class="badge bg-secondary ms-2"><i class="bi bi-archive me-1"></i>Đã lưu trữ</span>{% endif %}
     {% if project.owner_id == user.id %}<span class="badge ms-2" style="background:#ffedd5;color:#c2410c;">Quản lý Project</span>{% endif %}
   </h4>
   {% if can_manage_project %}
@@ -19,6 +20,17 @@
 </div>
 {% else %}
 <div class="mb-4"></div>
+{% endif %}
+
+{% if project.is_archived %}
+<div class="alert alert-secondary d-flex align-items-center gap-2 py-2 small">
+  <i class="bi bi-archive fs-5"></i>
+  <div>
+    Project này <strong>đã được lưu trữ</strong> ngày {{ project.archived_at | vn('%d/%m/%Y') }} —
+    toàn bộ nhật ký và dữ liệu vẫn còn nguyên, chỉ là không ghi thêm nhật ký mới vào được.
+    {% if can_manage_project %}Bấm <strong>“Mở lại project”</strong> bên dưới để tiếp tục làm việc.{% endif %}
+  </div>
+</div>
 {% endif %}
 
 <div class="row g-4">
@@ -142,10 +154,20 @@
               {% if m.user_id == project.owner_id %}<span class="badge bg-light text-dark border ms-1" style="font-size:.65rem;">quản lý project</span>{% endif %}
             </div>
             {% if can_manage_project and m.user_id != project.owner_id %}
-            <form method="post" action="/projects/{{ project.id }}/remove-member/{{ m.user_id }}"
-                  onsubmit="return confirm('Xoá {{ m.user.full_name or m.user.email }} khỏi project?')">
-              <button type="submit" class="btn btn-link btn-sm p-0 text-danger"><i class="bi bi-x-lg"></i></button>
-            </form>
+            <div class="d-flex align-items-center gap-2">
+              <form method="post" action="/projects/{{ project.id }}/transfer-owner/{{ m.user_id }}"
+                    onsubmit="return confirm('Chuyển quyền QUẢN LÝ project cho {{ m.user.full_name or m.user.email }}?\n\nSau khi chuyển, người này sẽ có toàn quyền quản lý project (thêm/xoá thành viên, sửa thông tin, xoá project).\nBạn sẽ trở thành thành viên thường và mất các quyền đó.')">
+                <button type="submit" class="btn btn-link btn-sm p-0 text-warning"
+                        data-bs-toggle="tooltip" title="Chuyển quyền quản lý project cho người này">
+                  <i class="bi bi-award"></i>
+                </button>
+              </form>
+              <form method="post" action="/projects/{{ project.id }}/remove-member/{{ m.user_id }}"
+                    onsubmit="return confirm('Xoá {{ m.user.full_name or m.user.email }} khỏi project?')">
+                <button type="submit" class="btn btn-link btn-sm p-0 text-danger"
+                        data-bs-toggle="tooltip" title="Xoá khỏi project"><i class="bi bi-x-lg"></i></button>
+              </form>
+            </div>
             {% endif %}
           </div>
           {% endfor %}
@@ -176,10 +198,28 @@
         </form>
         {% endif %}
         {% if can_manage_project %}
-        <form method="post" action="/projects/{{ project.id }}/delete"
-              onsubmit="return confirm('Xoá vĩnh viễn project {{ project.name }}? Nhật ký đã gắn sẽ được giữ lại nhưng không còn thuộc project nào.')">
-          <button type="submit" class="btn btn-outline-danger btn-sm w-100"><i class="bi bi-trash3 me-1"></i>Xoá project</button>
-        </form>
+          {% if project.is_archived %}
+          <form method="post" action="/projects/{{ project.id }}/unarchive">
+            <button type="submit" class="btn btn-outline-success btn-sm w-100">
+              <i class="bi bi-arrow-counterclockwise me-1"></i>Mở lại project
+            </button>
+          </form>
+          {% else %}
+          <form method="post" action="/projects/{{ project.id }}/archive"
+                onsubmit="return confirm('Lưu trữ project {{ project.name }}?\n\nProject sẽ được ẩn khỏi danh sách đang làm, nhưng GIỮ NGUYÊN toàn bộ nhật ký và dữ liệu — thành viên vẫn xem được, và bạn mở lại bất cứ lúc nào.')">
+            <button type="submit" class="btn btn-outline-secondary btn-sm w-100">
+              <i class="bi bi-archive me-1"></i>Lưu trữ project
+            </button>
+          </form>
+          {% endif %}
+
+          {# Xoá thật chỉ dành cho admin — người dùng thường dùng Lưu trữ ở trên. #}
+          {% if user.role == 'admin' or user.can_view_all %}
+          <form method="post" action="/projects/{{ project.id }}/delete"
+                onsubmit="return confirm('XOÁ VĨNH VIỄN project {{ project.name }}?\n\nNhật ký sẽ được giữ lại nhưng bị GỠ khỏi project — thành viên khác sẽ MẤT quyền xem nhật ký của nhau, và nhật ký đã khoá thì KHÔNG thể gắn lại project.\n\nCân nhắc dùng “Lưu trữ project” thay thế.')">
+            <button type="submit" class="btn btn-outline-danger btn-sm w-100"><i class="bi bi-trash3 me-1"></i>Xoá project (chỉ admin)</button>
+          </form>
+          {% endif %}
         {% endif %}
       </div>
     </div>
@@ -253,8 +293,13 @@
           <div class="text-center text-muted small py-4" id="chatLoading">Đang tải…</div>
         </div>
       </div>
-      <div class="modal-footer p-2">
-        <form id="chatForm" class="d-flex gap-2 w-100">
+      <div class="modal-footer p-2 d-block">
+        <div id="pcFilePreview" class="d-flex flex-wrap gap-1 mb-1"></div>
+        <form id="chatForm" class="d-flex gap-2 w-100 align-items-center">
+          <input type="file" id="pcFiles" multiple class="d-none">
+          <button type="button" class="btn btn-outline-secondary" id="pcAttachBtn" title="Đính kèm ảnh hoặc tệp (tối đa 25MB/tệp)">
+            <i class="bi bi-paperclip"></i>
+          </button>
           <input type="text" id="chatInput" class="form-control" placeholder="Nhắn cho cả nhóm…" autocomplete="off" maxlength="4000">
           <button type="submit" class="btn" style="background:#c2410c;color:#fff;"><i class="bi bi-send"></i></button>
         </form>
@@ -284,12 +329,31 @@
       const mine = (m.user_id === me);
       const div = document.createElement('div');
       div.className = 'd-flex mb-2 ' + (mine ? 'justify-content-end' : 'justify-content-start');
-      div.innerHTML =
-        '<div style="max-width:78%;">' +
-          (mine ? '' : '<div class="small fw-semibold text-secondary" style="font-size:.72rem;">' + esc(m.name) + '</div>') +
-          '<div class="px-3 py-2 rounded-3" style="background:' + (mine ? '#c2410c' : '#fff') + ';color:' + (mine ? '#fff' : '#111') + ';border:1px solid ' + (mine ? '#c2410c' : '#e5e7eb') + ';white-space:pre-wrap;word-break:break-word;">' + esc(m.content) + '</div>' +
-          '<div class="text-muted" style="font-size:.66rem;text-align:' + (mine ? 'right' : 'left') + ';">' + esc(m.time) + '</div>' +
-        '</div>';
+      let inner = '<div style="max-width:78%;">' +
+        (mine ? '' : '<div class="small fw-semibold text-secondary" style="font-size:.72rem;">' + esc(m.name) + '</div>');
+      // Tin có thể chỉ có ảnh/tệp -> chỉ vẽ bong bóng chữ khi thật sự có chữ
+      if (m.content) {
+        inner += '<div class="px-3 py-2 rounded-3" style="background:' + (mine ? '#c2410c' : '#fff') + ';color:' + (mine ? '#fff' : '#111') + ';border:1px solid ' + (mine ? '#c2410c' : '#e5e7eb') + ';white-space:pre-wrap;word-break:break-word;">' + esc(m.content) + '</div>';
+      }
+      for (const f of (m.files || [])) {
+        if (f.kind === 'image') {
+          inner += '<a href="' + f.url + '" target="_blank" class="d-block mt-1">' +
+                   '<img src="' + f.url + '" alt="' + esc(f.name) + '" ' +
+                   'style="max-width:100%;max-height:240px;border-radius:10px;border:1px solid #e5e7eb;"></a>';
+        } else {
+          const icon = f.kind === 'pdf' ? 'bi-file-earmark-pdf text-danger'
+                     : f.kind === 'doc' ? 'bi-file-earmark-text text-primary'
+                     : 'bi-file-earmark';
+          inner += '<a href="' + f.url + '" target="_blank" ' +
+                   'class="d-flex align-items-center gap-2 mt-1 p-2 rounded-3 text-decoration-none" ' +
+                   'style="background:#fff;border:1px solid #e5e7eb;color:#111;">' +
+                   '<i class="bi ' + icon + ' fs-4"></i>' +
+                   '<span class="small text-truncate" style="max-width:180px;">' + esc(f.name) +
+                   '<br><span class="text-muted" style="font-size:.66rem;">' + f.size_kb + ' KB — bấm để tải</span></span></a>';
+        }
+      }
+      inner += '<div class="text-muted" style="font-size:.66rem;text-align:' + (mine ? 'right' : 'left') + ';">' + esc(m.time) + '</div></div>';
+      div.innerHTML = inner;
       listEl.appendChild(div);
       lastId = Math.max(lastId, m.id);
     }
@@ -317,15 +381,45 @@
     } catch (e) { /* bỏ qua lỗi mạng tạm thời */ }
   }
 
+  // ── Đính kèm ảnh/tệp ──
+  const pcFiles   = document.getElementById('pcFiles');
+  const pcPreview = document.getElementById('pcFilePreview');
+  document.getElementById('pcAttachBtn').addEventListener('click', () => pcFiles.click());
+
+  function pcRenderPreview() {
+    pcPreview.innerHTML = '';
+    [...pcFiles.files].forEach(f => {
+      const chip = document.createElement('span');
+      chip.className = 'badge bg-light text-dark border d-inline-flex align-items-center gap-1';
+      chip.innerHTML = '<i class="bi bi-paperclip"></i>' + esc(f.name) +
+                       ' <span class="text-muted">(' + Math.round(f.size / 1024) + ' KB)</span>';
+      pcPreview.appendChild(chip);
+    });
+  }
+  pcFiles.addEventListener('change', pcRenderPreview);
+
   formEl.addEventListener('submit', async e => {
     e.preventDefault();
     const text = inputEl.value.trim();
-    if (!text) return;
-    inputEl.value = '';
-    const fd = new FormData(); fd.append('content', text);
+    const hasFiles = pcFiles.files.length > 0;
+    if (!text && !hasFiles) return;      // cho gửi tin chỉ có tệp, nhưng không cho tin rỗng
+
+    const fd = new FormData();
+    fd.append('content', text);
+    [...pcFiles.files].forEach(f => fd.append('files', f));
+
+    inputEl.value = ''; pcFiles.value = ''; pcRenderPreview();
     try {
       const r = await fetch(BASE, { method: 'POST', body: fd });
-      if (r.ok) load(false);
+      const d = await r.json().catch(() => ({}));
+      if (r.ok) {
+        // Máy chủ từ chối bớt tệp -> phải báo, đừng im lặng bỏ qua
+        if (d.rejected && d.rejected.length) alert('Không gửi được một số tệp:\n• ' + d.rejected.join('\n• '));
+        load(false);
+      } else {
+        alert((d.rejected && d.rejected.length) ? ('Không gửi được:\n• ' + d.rejected.join('\n• ')) : 'Không gửi được tin nhắn.');
+        inputEl.value = text;
+      }
     } catch (e) { inputEl.value = text; }
   });
 
